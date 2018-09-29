@@ -1,0 +1,8 @@
+[package]
+name = "rust-ledger-parser"
+version = "0.1.0"
+authors = ["Marek G <marek@nomail.com>"]
+
+[dependencies]
+nom = "4"
+chrono = "0.4"
