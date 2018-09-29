@@ -6,3 +6,4 @@ authors = ["Marek G <marek@nomail.com>"]
 [dependencies]
 nom = "4"
 chrono = "0.4"
+rust_decimal = "0.10"
