@@ -1,7 +1,7 @@
 use std::str::FromStr;
 use nom::*;
 use nom::types::CompleteStr;
-use chrono::NaiveDate;
+use chrono::{ NaiveDate, NaiveDateTime };
 use rust_decimal::Decimal;
 
 #[derive(Debug,PartialEq,Eq)]
@@ -42,6 +42,10 @@ fn is_white_char(c: char) -> bool {
     (c == ' ' || c == '\t' || c == '\r' || c == '\n')
 }
 
+named!(white_spaces<CompleteStr, CompleteStr>,
+    take_while1!(is_white_char)
+);
+
 named_args!(numberN(n: usize)<CompleteStr, i32>,
     map_res!(take_while_m_n!(n, n, is_digit), |s: CompleteStr| { i32::from_str(s.0) })
 );
@@ -57,18 +61,56 @@ named!(parse_date_internal<CompleteStr, (i32, i32, i32)>,
     )
 );
 
+named!(parse_time_internal<CompleteStr, (i32, i32, i32)>,
+    do_parse!(
+        hour: call!(numberN, 2) >>
+        tag!(":") >>
+        min: call!(numberN, 2) >>
+        tag!(":") >>
+        sec: call!(numberN, 2) >>
+        ((hour, min, sec))
+    )
+);
+
+named!(parse_datetime_internal<CompleteStr, (i32, i32, i32, i32, i32, i32)>,
+    do_parse!(
+        date: parse_date_internal >>
+        white_spaces >>
+        time: parse_time_internal >>
+        ((date.0, date.1, date.2, time.0, time.1, time.2))
+    )
+);
+
 pub fn parse_date(text: CompleteStr) -> IResult<CompleteStr, NaiveDate> {
     let res = parse_date_internal(text)?;
 
     let rest = res.0;
     let value = res.1;
 
-    let parsed_opt = NaiveDate::from_ymd_opt(value.0, value.1 as u32, value.2 as u32);
-    if let Some(parsed) = parsed_opt {
-        Ok((rest, parsed))
+    let date_opt = NaiveDate::from_ymd_opt(value.0, value.1 as u32, value.2 as u32);
+    if let Some(date) = date_opt {
+        Ok((rest, date))
     } else {
         Err(Err::Error(error_position!(CompleteStr(&text.0[0..10]), ErrorKind::Custom(CustomError::NonExistingDate as u32))))
     }
+}
+
+pub fn parse_datetime(text: CompleteStr) -> IResult<CompleteStr, NaiveDateTime> {
+    let res = parse_datetime_internal(text)?;
+
+    let rest = res.0;
+    let value = res.1;
+
+    let date_opt = NaiveDate::from_ymd_opt(value.0, value.1 as u32, value.2 as u32);
+    if let Some(date) = date_opt {
+        let datetime_opt = date.and_hms_opt(value.3 as u32, value.4 as u32, value.5 as u32);
+        if let Some(datetime) = datetime_opt {
+            return Ok((rest, datetime))
+        }
+    }
+
+    let len = text.len() - rest.len();
+    Err(Err::Error(error_position!(CompleteStr(&text.0[0..len]), ErrorKind::Custom(CustomError::NonExistingDate as u32))))
 }
 
 named!(parse_quantity<CompleteStr, Decimal>,
@@ -154,6 +196,13 @@ mod tests {
         assert_eq!(Ok((CompleteStr(""), NaiveDate::from_ymd(2017, 03, 24))), parse_date(CompleteStr("2017/03/24")));
         assert_eq!(Ok((CompleteStr(""), NaiveDate::from_ymd(2017, 03, 24))), parse_date(CompleteStr("2017.03.24")));
         assert_eq!(Err(Error(Code(CompleteStr("2017-13-24"), Custom(CustomError::NonExistingDate as u32)))), parse_date(CompleteStr("2017-13-24")));
+    }
+
+    #[test]
+    fn parse_datetime_test() {
+        assert_eq!(Ok((CompleteStr(""), NaiveDate::from_ymd(2017, 03, 24).and_hms(17, 15, 23))), parse_datetime(CompleteStr("2017-03-24 17:15:23")));
+        assert_eq!(Err(Error(Code(CompleteStr("2017-13-24 22:11:22"), Custom(CustomError::NonExistingDate as u32)))), parse_datetime(CompleteStr("2017-13-24 22:11:22")));
+        assert_eq!(Err(Error(Code(CompleteStr("2017-03-24 25:11:22"), Custom(CustomError::NonExistingDate as u32)))), parse_datetime(CompleteStr("2017-03-24 25:11:22")));
     }
 
     #[test]
