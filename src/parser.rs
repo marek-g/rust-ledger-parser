@@ -22,6 +22,13 @@ pub struct Amount {
     pub commodity: Commodity,
 }
 
+#[derive(Debug,PartialEq,Eq)]
+pub struct CommodityPrice {
+    pub datetime: NaiveDateTime,
+    pub commodity_name: String,
+    pub amount: Amount,
+}
+
 pub enum CustomError {
     NonExistingDate
 }
@@ -44,6 +51,10 @@ fn is_white_char(c: char) -> bool {
 
 named!(white_spaces<CompleteStr, CompleteStr>,
     take_while1!(is_white_char)
+);
+
+named!(eol_or_eof<CompleteStr, CompleteStr>,
+    alt!(eol | eof!())
 );
 
 named_args!(numberN(n: usize)<CompleteStr, i32>,
@@ -182,6 +193,20 @@ named!(parse_amount<CompleteStr, Amount>,
     )
 );
 
+named!(parse_commodity_price<CompleteStr, CommodityPrice>,
+    do_parse!(
+        tag!("P") >>
+        white_spaces >>
+        datetime: parse_datetime >>
+        white_spaces >>
+        name: parse_commodity >>
+        white_spaces >>
+        amount: parse_amount >>
+        eol_or_eof >>
+        (CommodityPrice { datetime: datetime, commodity_name: name.to_string(), amount: amount })
+    )
+);
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -228,5 +253,15 @@ mod tests {
         assert_eq!(Ok((CompleteStr(""), Amount { quantity: Decimal::new(-120, 2), commodity: Commodity { name: "$".to_string(), position: CommodityPosition::Left }})), parse_amount(CompleteStr("- $ 1.20")));
         assert_eq!(Ok((CompleteStr(""), Amount { quantity: Decimal::new(120, 2), commodity: Commodity { name: "USD".to_string(), position: CommodityPosition::Right }})), parse_amount(CompleteStr("1.20USD")));
         assert_eq!(Ok((CompleteStr(""), Amount { quantity: Decimal::new(-120, 2), commodity: Commodity { name: "USD".to_string(), position: CommodityPosition::Right }})), parse_amount(CompleteStr("-1.20 USD")));
+    }
+
+    #[test]
+    fn parse_commodity_price_test() {
+        assert_eq!(Ok((CompleteStr(""),
+            CommodityPrice {
+                datetime: NaiveDate::from_ymd(2017, 11, 12).and_hms(12, 00, 00),
+                commodity_name: "mBH".to_string(),
+                amount: Amount { quantity: Decimal::new(500, 2), commodity: Commodity { name: "PLN".to_string(), position: CommodityPosition::Right }} })),
+            parse_commodity_price(CompleteStr("P 2017-11-12 12:00:00 mBH 5.00 PLN\r\n")));
     }
 }
