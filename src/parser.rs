@@ -49,6 +49,10 @@ fn is_white_char(c: char) -> bool {
     (c == ' ' || c == '\t' || c == '\r' || c == '\n')
 }
 
+fn is_not_eol_char(c: char) -> bool {
+    (c != '\r' && c != '\n')
+}
+
 named!(white_spaces<CompleteStr, CompleteStr>,
     take_while1!(is_white_char)
 );
@@ -205,6 +209,18 @@ named!(parse_commodity_price<CompleteStr, CommodityPrice>,
         eol_or_eof >>
         (CommodityPrice { datetime: datetime, commodity_name: name.to_string(), amount: amount })
     )
+);
+
+named!(parse_empty_line<CompleteStr, CompleteStr>,
+   alt!(eol | recognize!(pair!(white_spaces, eol_or_eof)))
+);
+
+named!(parse_line_comment<CompleteStr, CompleteStr>,
+    recognize!(tuple!(
+        alt!(tag!(";") | tag!("#") | tag!("|") | tag!("*")),
+        take_while!(is_not_eol_char),
+        eol_or_eof
+    ))
 );
 
 #[cfg(test)]
