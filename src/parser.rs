@@ -217,7 +217,7 @@ named!(parse_empty_line<CompleteStr, CompleteStr>,
 
 named!(parse_line_comment<CompleteStr, CompleteStr>,
     recognize!(tuple!(
-        alt!(tag!(";") | tag!("#") | tag!("|") | tag!("*")),
+        alt!(tag!(";") | tag!("#") | tag!("%") | tag!("|") | tag!("*")),
         take_while!(is_not_eol_char),
         eol_or_eof
     ))
