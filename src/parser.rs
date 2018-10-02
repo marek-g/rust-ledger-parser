@@ -223,6 +223,39 @@ named!(parse_line_comment<CompleteStr, CompleteStr>,
     ))
 );
 
+pub fn parse_account(text: CompleteStr) -> IResult<CompleteStr, &str> {
+    let mut second_space = false;
+    for ind in text.iter_indices() {
+        let (pos, c) = ind;
+
+        if c == '\t' || c == '\r' || c == '\n' {
+            if pos > 0 {
+                let (rest, found) = text.take_split(pos);
+                return Ok((rest, found.0))
+            } else {
+                return Err(Err::Incomplete(Needed::Size(1)))
+            }
+        }
+        
+        if c == ' ' {
+            if second_space {
+                let (rest, found) = text.take_split(pos - 1);
+                return Ok((rest, found.0))
+            } else {
+                second_space = true;
+            }
+        } else {
+            second_space = false;
+
+             if pos == text.len() - 1 && pos > 0 {
+                 return Ok((CompleteStr(""), text.0))
+             }
+        }
+    }
+
+    Err(Err::Incomplete(Needed::Size(1)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -279,5 +312,12 @@ mod tests {
                 commodity_name: "mBH".to_string(),
                 amount: Amount { quantity: Decimal::new(500, 2), commodity: Commodity { name: "PLN".to_string(), position: CommodityPosition::Right }} })),
             parse_commodity_price(CompleteStr("P 2017-11-12 12:00:00 mBH 5.00 PLN\r\n")));
+    }
+
+    #[test]
+    fn parse_account_test() {
+        assert_eq!(Ok((CompleteStr("  "), "TEST:ABC 123")), parse_account(CompleteStr("TEST:ABC 123  ")));
+        assert_eq!(Ok((CompleteStr("\t"), "TEST:ABC 123")), parse_account(CompleteStr("TEST:ABC 123\t")));
+        assert_eq!(Ok((CompleteStr(""), "TEST:ABC 123")), parse_account(CompleteStr("TEST:ABC 123")));
     }
 }
