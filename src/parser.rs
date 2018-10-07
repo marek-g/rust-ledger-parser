@@ -19,20 +19,28 @@ pub struct Commodity {
 #[derive(Debug,PartialEq,Eq)]
 pub struct Amount {
     pub quantity: Decimal,
-    pub commodity: Commodity,
+    pub commodity: Commodity
 }
 
 #[derive(Debug,PartialEq,Eq)]
 pub struct CommodityPrice {
     pub datetime: NaiveDateTime,
     pub commodity_name: String,
-    pub amount: Amount,
+    pub amount: Amount
+}
+
+
+#[derive(Debug,PartialEq,Eq)]
+pub enum TransactionStatus {
+    Pending,
+    Cleared
 }
 
 #[derive(Debug,PartialEq,Eq)]
 pub struct Posting {
     pub account: String,
     pub amount: Amount,
+    pub status: Option<TransactionStatus>
 }
 
 pub enum CustomError {
@@ -262,15 +270,24 @@ pub fn parse_account(text: CompleteStr) -> IResult<CompleteStr, &str> {
     Err(Err::Incomplete(Needed::Size(1)))
 }
 
+named!(parse_transaction_status<CompleteStr, TransactionStatus>,
+    do_parse!(
+        status: alt!(tag!("*") | tag!("!")) >>
+        (if status == CompleteStr("*") { TransactionStatus::Cleared } else { TransactionStatus::Pending })
+    )
+);
+
 named!(parse_posting<CompleteStr, Posting>,
     do_parse!(
         white_spaces >>
+        status: opt!(parse_transaction_status) >>
+        opt!(white_spaces) >>
         account: parse_account >>
         white_spaces >>
         amount: parse_amount >>
         opt!(white_spaces) >>
         eol_or_eof >>
-        (Posting { account: account.to_string(), amount: amount })
+        (Posting { account: account.to_string(), amount: amount, status: status })
     )
 );
 
@@ -344,12 +361,28 @@ mod tests {
     }
 
     #[test]
+    fn parse_transaction_status_test() {
+        assert_eq!(parse_transaction_status(CompleteStr("!")), Ok((CompleteStr(""), TransactionStatus::Pending)));
+        assert_eq!(parse_transaction_status(CompleteStr("*")), Ok((CompleteStr(""), TransactionStatus::Cleared)));
+    }
+
+    #[test]
     fn parse_posting_test() {
         assert_eq!(parse_posting(CompleteStr(" TEST:ABC 123  $1.20")),
             Ok((CompleteStr(""),
                 Posting {
                     account: "TEST:ABC 123".to_string(),
-                    amount: Amount { quantity: Decimal::new(120, 2), commodity: Commodity { name: "$".to_string(), position: CommodityPosition::Left }}
+                    amount: Amount { quantity: Decimal::new(120, 2), commodity: Commodity { name: "$".to_string(), position: CommodityPosition::Left }},
+                    status: None
+                }
+            ))
+        );
+        assert_eq!(parse_posting(CompleteStr(" ! TEST:ABC 123  $1.20")),
+            Ok((CompleteStr(""),
+                Posting {
+                    account: "TEST:ABC 123".to_string(),
+                    amount: Amount { quantity: Decimal::new(120, 2), commodity: Commodity { name: "$".to_string(), position: CommodityPosition::Left }},
+                    status: Some(TransactionStatus::Pending)
                 }
             ))
         );
