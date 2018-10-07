@@ -29,6 +29,12 @@ pub struct CommodityPrice {
     pub amount: Amount,
 }
 
+#[derive(Debug,PartialEq,Eq)]
+pub struct Posting {
+    pub account: String,
+    pub amount: Amount,
+}
+
 pub enum CustomError {
     NonExistingDate
 }
@@ -256,6 +262,19 @@ pub fn parse_account(text: CompleteStr) -> IResult<CompleteStr, &str> {
     Err(Err::Incomplete(Needed::Size(1)))
 }
 
+named!(parse_posting<CompleteStr, Posting>,
+    do_parse!(
+        white_spaces >>
+        account: parse_account >>
+        white_spaces >>
+        amount: parse_amount >>
+        opt!(white_spaces) >>
+        eol_or_eof >>
+        (Posting { account: account.to_string(), amount: amount })
+    )
+);
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -266,58 +285,73 @@ mod tests {
 
     #[test]
     fn parse_date_test() {
-        assert_eq!(Ok((CompleteStr(""), NaiveDate::from_ymd(2017, 03, 24))), parse_date(CompleteStr("2017-03-24")));
-        assert_eq!(Ok((CompleteStr(""), NaiveDate::from_ymd(2017, 03, 24))), parse_date(CompleteStr("2017/03/24")));
-        assert_eq!(Ok((CompleteStr(""), NaiveDate::from_ymd(2017, 03, 24))), parse_date(CompleteStr("2017.03.24")));
-        assert_eq!(Err(Error(Code(CompleteStr("2017-13-24"), Custom(CustomError::NonExistingDate as u32)))), parse_date(CompleteStr("2017-13-24")));
+        assert_eq!(parse_date(CompleteStr("2017-03-24")), Ok((CompleteStr(""), NaiveDate::from_ymd(2017, 03, 24))));
+        assert_eq!(parse_date(CompleteStr("2017/03/24")), Ok((CompleteStr(""), NaiveDate::from_ymd(2017, 03, 24))));
+        assert_eq!(parse_date(CompleteStr("2017.03.24")), Ok((CompleteStr(""), NaiveDate::from_ymd(2017, 03, 24))));
+        assert_eq!(parse_date(CompleteStr("2017-13-24")), Err(Error(Code(CompleteStr("2017-13-24"), Custom(CustomError::NonExistingDate as u32)))));
     }
 
     #[test]
     fn parse_datetime_test() {
-        assert_eq!(Ok((CompleteStr(""), NaiveDate::from_ymd(2017, 03, 24).and_hms(17, 15, 23))), parse_datetime(CompleteStr("2017-03-24 17:15:23")));
-        assert_eq!(Err(Error(Code(CompleteStr("2017-13-24 22:11:22"), Custom(CustomError::NonExistingDate as u32)))), parse_datetime(CompleteStr("2017-13-24 22:11:22")));
-        assert_eq!(Err(Error(Code(CompleteStr("2017-03-24 25:11:22"), Custom(CustomError::NonExistingDate as u32)))), parse_datetime(CompleteStr("2017-03-24 25:11:22")));
+        assert_eq!(parse_datetime(CompleteStr("2017-03-24 17:15:23")), Ok((CompleteStr(""), NaiveDate::from_ymd(2017, 03, 24).and_hms(17, 15, 23))));
+        assert_eq!(parse_datetime(CompleteStr("2017-13-24 22:11:22")), Err(Error(Code(CompleteStr("2017-13-24 22:11:22"), Custom(CustomError::NonExistingDate as u32)))));
+        assert_eq!(parse_datetime(CompleteStr("2017-03-24 25:11:22")), Err(Error(Code(CompleteStr("2017-03-24 25:11:22"), Custom(CustomError::NonExistingDate as u32)))));
     }
 
     #[test]
     fn parse_quantity_test() {
-        assert_eq!(Ok((CompleteStr(""), Decimal::new(202, 2))), parse_quantity(CompleteStr("2.02")));
-        assert_eq!(Ok((CompleteStr(""), Decimal::new(-1213, 2))), parse_quantity(CompleteStr("-12.13")));
-        assert_eq!(Ok((CompleteStr(""), Decimal::new(1, 1))), parse_quantity(CompleteStr("0.1")));
-        assert_eq!(Ok((CompleteStr(""), Decimal::new(3, 0))), parse_quantity(CompleteStr("3")));
+        assert_eq!(parse_quantity(CompleteStr("2.02")), Ok((CompleteStr(""), Decimal::new(202, 2))));
+        assert_eq!(parse_quantity(CompleteStr("-12.13")), Ok((CompleteStr(""), Decimal::new(-1213, 2))));
+        assert_eq!(parse_quantity(CompleteStr("0.1")), Ok((CompleteStr(""), Decimal::new(1, 1))));
+        assert_eq!(parse_quantity(CompleteStr("3")), Ok((CompleteStr(""), Decimal::new(3, 0))));
     }
 
     #[test]
     fn parse_commodity_test() {
-        assert_eq!(Ok((CompleteStr(""), "ABC 123")), parse_commodity(CompleteStr("\"ABC 123\"")));
-        assert_eq!(Ok((CompleteStr(" "), "ABC")), parse_commodity(CompleteStr("ABC ")));
-        assert_eq!(Ok((CompleteStr("1"), "$")), parse_commodity(CompleteStr("$1")));
+        assert_eq!(parse_commodity(CompleteStr("\"ABC 123\"")), Ok((CompleteStr(""), "ABC 123")));
+        assert_eq!(parse_commodity(CompleteStr("ABC ")), Ok((CompleteStr(" "), "ABC")));
+        assert_eq!(parse_commodity(CompleteStr("$1")), Ok((CompleteStr("1"), "$")));
     }
 
     #[test]
     fn parse_amount_test() {
-        assert_eq!(Ok((CompleteStr(""), Amount { quantity: Decimal::new(120, 2), commodity: Commodity { name: "$".to_string(), position: CommodityPosition::Left }})), parse_amount(CompleteStr("$1.20")));
-        assert_eq!(Ok((CompleteStr(""), Amount { quantity: Decimal::new(-120, 2), commodity: Commodity { name: "$".to_string(), position: CommodityPosition::Left }})), parse_amount(CompleteStr("$-1.20")));
-        assert_eq!(Ok((CompleteStr(""), Amount { quantity: Decimal::new(-120, 2), commodity: Commodity { name: "$".to_string(), position: CommodityPosition::Left }})), parse_amount(CompleteStr("-$1.20")));
-        assert_eq!(Ok((CompleteStr(""), Amount { quantity: Decimal::new(-120, 2), commodity: Commodity { name: "$".to_string(), position: CommodityPosition::Left }})), parse_amount(CompleteStr("- $ 1.20")));
-        assert_eq!(Ok((CompleteStr(""), Amount { quantity: Decimal::new(120, 2), commodity: Commodity { name: "USD".to_string(), position: CommodityPosition::Right }})), parse_amount(CompleteStr("1.20USD")));
-        assert_eq!(Ok((CompleteStr(""), Amount { quantity: Decimal::new(-120, 2), commodity: Commodity { name: "USD".to_string(), position: CommodityPosition::Right }})), parse_amount(CompleteStr("-1.20 USD")));
+        assert_eq!(parse_amount(CompleteStr("$1.20")), Ok((CompleteStr(""), Amount { quantity: Decimal::new(120, 2), commodity: Commodity { name: "$".to_string(), position: CommodityPosition::Left }})));
+        assert_eq!(parse_amount(CompleteStr("$-1.20")), Ok((CompleteStr(""), Amount { quantity: Decimal::new(-120, 2), commodity: Commodity { name: "$".to_string(), position: CommodityPosition::Left }})));
+        assert_eq!(parse_amount(CompleteStr("-$1.20")), Ok((CompleteStr(""), Amount { quantity: Decimal::new(-120, 2), commodity: Commodity { name: "$".to_string(), position: CommodityPosition::Left }})));
+        assert_eq!(parse_amount(CompleteStr("- $ 1.20")), Ok((CompleteStr(""), Amount { quantity: Decimal::new(-120, 2), commodity: Commodity { name: "$".to_string(), position: CommodityPosition::Left }})));
+        assert_eq!(parse_amount(CompleteStr("1.20USD")), Ok((CompleteStr(""), Amount { quantity: Decimal::new(120, 2), commodity: Commodity { name: "USD".to_string(), position: CommodityPosition::Right }})));
+        assert_eq!(parse_amount(CompleteStr("-1.20 USD")), Ok((CompleteStr(""), Amount { quantity: Decimal::new(-120, 2), commodity: Commodity { name: "USD".to_string(), position: CommodityPosition::Right }})));
     }
 
     #[test]
     fn parse_commodity_price_test() {
-        assert_eq!(Ok((CompleteStr(""),
-            CommodityPrice {
-                datetime: NaiveDate::from_ymd(2017, 11, 12).and_hms(12, 00, 00),
-                commodity_name: "mBH".to_string(),
-                amount: Amount { quantity: Decimal::new(500, 2), commodity: Commodity { name: "PLN".to_string(), position: CommodityPosition::Right }} })),
-            parse_commodity_price(CompleteStr("P 2017-11-12 12:00:00 mBH 5.00 PLN\r\n")));
+        assert_eq!(parse_commodity_price(CompleteStr("P 2017-11-12 12:00:00 mBH 5.00 PLN\r\n")),
+            Ok((CompleteStr(""),
+                CommodityPrice {
+                    datetime: NaiveDate::from_ymd(2017, 11, 12).and_hms(12, 00, 00),
+                    commodity_name: "mBH".to_string(),
+                    amount: Amount { quantity: Decimal::new(500, 2), commodity: Commodity { name: "PLN".to_string(), position: CommodityPosition::Right }}
+                }
+            ))
+        );
     }
 
     #[test]
     fn parse_account_test() {
-        assert_eq!(Ok((CompleteStr("  "), "TEST:ABC 123")), parse_account(CompleteStr("TEST:ABC 123  ")));
-        assert_eq!(Ok((CompleteStr("\t"), "TEST:ABC 123")), parse_account(CompleteStr("TEST:ABC 123\t")));
-        assert_eq!(Ok((CompleteStr(""), "TEST:ABC 123")), parse_account(CompleteStr("TEST:ABC 123")));
+        assert_eq!(parse_account(CompleteStr("TEST:ABC 123  ")), Ok((CompleteStr("  "), "TEST:ABC 123")));
+        assert_eq!(parse_account(CompleteStr("TEST:ABC 123\t")), Ok((CompleteStr("\t"), "TEST:ABC 123")));
+        assert_eq!(parse_account(CompleteStr("TEST:ABC 123")), Ok((CompleteStr(""), "TEST:ABC 123")));
+    }
+
+    #[test]
+    fn parse_posting_test() {
+        assert_eq!(parse_posting(CompleteStr(" TEST:ABC 123  $1.20")),
+            Ok((CompleteStr(""),
+                Posting {
+                    account: "TEST:ABC 123".to_string(),
+                    amount: Amount { quantity: Decimal::new(120, 2), commodity: Commodity { name: "$".to_string(), position: CommodityPosition::Left }}
+                }
+            ))
+        );
     }
 }
