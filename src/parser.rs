@@ -10,6 +10,13 @@ pub enum CustomError {
     NonExistingDate
 }
 
+enum LedgerItem {
+    EmptyLine,
+    LineComment(String),
+    Transaction(Transaction),
+    CommodityPrice(CommodityPrice)
+}
+
 fn is_digit(c: char) -> bool {
     (c >= '0' && c <= '9')
 }
@@ -190,15 +197,17 @@ named!(parse_commodity_price<CompleteStr, CommodityPrice>,
 );
 
 named!(parse_empty_line<CompleteStr, CompleteStr>,
-   alt!(eol | recognize!(pair!(white_spaces, eol_or_eof)))
+    alt!(eol | recognize!(pair!(white_spaces, eol_or_eof)))
 );
 
-named!(parse_line_comment<CompleteStr, CompleteStr>,
-    recognize!(tuple!(
-        alt!(tag!(";") | tag!("#") | tag!("%") | tag!("|") | tag!("*")),
-        take_while!(is_not_eol_char),
-        eol_or_eof
-    ))
+named!(parse_line_comment<CompleteStr, &str>,
+    do_parse!(
+        alt!(tag!(";") | tag!("#") | tag!("%") | tag!("|") | tag!("*")) >>
+        opt!(white_spaces) >>
+        comment: take_while!(is_not_eol_char) >>
+        eol_or_eof >>
+        (comment.0)
+    )
 );
 
 pub fn parse_account(text: CompleteStr) -> IResult<CompleteStr, &str> {
@@ -282,6 +291,15 @@ named!(parse_transaction<CompleteStr, Transaction>,
             postings: postings
         })
     )
+);
+
+named!(parse_ledger_items<CompleteStr, Vec<LedgerItem>>,
+    many0!(alt!(
+        map!(parse_empty_line, |_| { LedgerItem::EmptyLine }) |
+        map!(parse_line_comment, |comment: &str| { LedgerItem::LineComment(comment.to_string()) }) |
+        map!(parse_transaction, |transaction: Transaction| { LedgerItem::Transaction(transaction) }) |
+        map!(parse_commodity_price, |cm: CommodityPrice| { LedgerItem::CommodityPrice(cm) })
+    ))
 );
 
 
@@ -408,5 +426,31 @@ mod tests {
                 }
             ))
         );
+    }
+
+    #[test]
+    fn parse_ledger_items_test() {
+        let res = parse_ledger_items(CompleteStr(r#"; Example 1
+
+P 2017-11-12 12:00:00 mBH 5.00 PLN
+
+; Comment
+2018-10-01=2018-10-14 ! (123) Marek Ogarek
+ TEST:ABC 123  $1.20
+ TEST:ABC 123  $1.20
+
+2018-10-01=2018-10-14 ! (123) Marek Ogarek
+ TEST:ABC 123  $1.20
+ TEST:ABC 123  $1.20
+"#)).unwrap().1;
+        assert_eq!(res.len(), 8);
+        assert!(match res[0] { LedgerItem::LineComment(_) => true, _ => false } );
+        assert!(match res[1] { LedgerItem::EmptyLine => true, _ => false } );
+        assert!(match res[2] { LedgerItem::CommodityPrice(_) => true, _ => false } );
+        assert!(match res[3] { LedgerItem::EmptyLine => true, _ => false } );
+        assert!(match res[4] { LedgerItem::LineComment(_) => true, _ => false } );
+        assert!(match res[5] { LedgerItem::Transaction(_) => true, _ => false } );
+        assert!(match res[6] { LedgerItem::EmptyLine => true, _ => false } );
+        assert!(match res[7] { LedgerItem::Transaction(_) => true, _ => false } );
     }
 }
