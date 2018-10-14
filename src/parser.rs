@@ -43,6 +43,16 @@ pub struct Posting {
     pub status: Option<TransactionStatus>
 }
 
+#[derive(Debug,PartialEq,Eq)]
+pub struct Transaction {
+    pub date: NaiveDate,
+    pub effective_date: Option<NaiveDate>,
+    pub status: Option<TransactionStatus>,
+    pub code: Option<String>,
+    pub description: String,
+    pub postings: Vec<Posting>
+}
+
 pub enum CustomError {
     NonExistingDate
 }
@@ -60,7 +70,7 @@ fn is_commodity_char(c: char) -> bool {
 }
 
 fn is_white_char(c: char) -> bool {
-    (c == ' ' || c == '\t' || c == '\r' || c == '\n')
+    (c == ' ' || c == '\t')
 }
 
 fn is_not_eol_char(c: char) -> bool {
@@ -179,34 +189,35 @@ named!(parse_commodity<CompleteStr, &str>,
 );
 
 named!(parse_amount<CompleteStr, Amount>,
-    ws!(
-        alt!(
-            do_parse!(
-                neg_opt: opt!(tag!("-")) >>
-                commodity: parse_commodity >>
-                quantity: parse_quantity >>
-                (Amount {
-                    quantity: if let Some(_) = neg_opt {
-                        quantity * Decimal::new(-1, 0)
-                    } else { quantity },
-                    commodity: Commodity {
-                        name: commodity.to_string(),
-                        position: CommodityPosition::Left
-                    }
-                })
-            )
-            |
-            do_parse!(
-                quantity: parse_quantity >>
-                commodity: parse_commodity >>
-                (Amount {
-                    quantity: quantity,
-                    commodity: Commodity {
-                        name: commodity.to_string(),
-                        position: CommodityPosition::Right
-                    }
-                })
-            )
+    alt!(
+        do_parse!(
+            neg_opt: opt!(tag!("-")) >>
+            opt!(white_spaces) >>
+            commodity: parse_commodity >>
+            opt!(white_spaces) >>
+            quantity: parse_quantity >>
+            (Amount {
+                quantity: if let Some(_) = neg_opt {
+                    quantity * Decimal::new(-1, 0)
+                } else { quantity },
+                commodity: Commodity {
+                    name: commodity.to_string(),
+                    position: CommodityPosition::Left
+                }
+            })
+        )
+        |
+        do_parse!(
+            quantity: parse_quantity >>
+            opt!(white_spaces) >>
+            commodity: parse_commodity >>
+            (Amount {
+                quantity: quantity,
+                commodity: Commodity {
+                    name: commodity.to_string(),
+                    position: CommodityPosition::Right
+                }
+            })
         )
     )
 );
@@ -291,6 +302,35 @@ named!(parse_posting<CompleteStr, Posting>,
     )
 );
 
+named!(parse_transaction<CompleteStr, Transaction>,
+    do_parse!(
+        date: parse_date >>
+        effective_date: opt!(do_parse!(
+            tag!("=") >>
+            edate: parse_date >>
+            (edate)
+        )) >>
+        white_spaces >>
+        status: opt!(parse_transaction_status) >>
+        opt!(white_spaces) >>
+        code: opt!(map!(delimited!(char!('('), is_not!(")"), char!(')')),
+            |s: CompleteStr| { s.0.to_string() })) >>
+        opt!(white_spaces) >>
+        description: map!(take_while!(is_not_eol_char),
+            |s: CompleteStr| { s.0.to_string() }) >>
+        eol_or_eof >>
+        postings: many1!(parse_posting) >>
+        (Transaction {
+            date: date,
+            effective_date: effective_date,
+            status: status,
+            code: code,
+            description: description,
+            postings: postings
+        })
+    )
+);
+
 
 #[cfg(test)]
 mod tests {
@@ -368,7 +408,7 @@ mod tests {
 
     #[test]
     fn parse_posting_test() {
-        assert_eq!(parse_posting(CompleteStr(" TEST:ABC 123  $1.20")),
+        assert_eq!(parse_posting(CompleteStr(" TEST:ABC 123  $1.20\n")),
             Ok((CompleteStr(""),
                 Posting {
                     account: "TEST:ABC 123".to_string(),
@@ -383,6 +423,35 @@ mod tests {
                     account: "TEST:ABC 123".to_string(),
                     amount: Amount { quantity: Decimal::new(120, 2), commodity: Commodity { name: "$".to_string(), position: CommodityPosition::Left }},
                     status: Some(TransactionStatus::Pending)
+                }
+            ))
+        );
+    }
+
+    #[test]
+    fn parse_transaction_test() {
+        assert_eq!(parse_transaction(CompleteStr(r#"2018-10-01=2018-10-14 ! (123) Marek Ogarek
+ TEST:ABC 123  $1.20
+ TEST:ABC 123  $1.20"#)),
+            Ok((CompleteStr(""),
+                Transaction {
+                    date: NaiveDate::from_ymd(2018, 10, 01),
+                    effective_date: Some(NaiveDate::from_ymd(2018, 10, 14)),
+                    status: Some(TransactionStatus::Pending),
+                    code: Some("123".to_string()),
+                    description: "Marek Ogarek".to_string(),
+                    postings: vec![
+                        Posting {
+                            account: "TEST:ABC 123".to_string(),
+                            amount: Amount { quantity: Decimal::new(120, 2), commodity: Commodity { name: "$".to_string(), position: CommodityPosition::Left }},
+                            status: None
+                        },
+                        Posting {
+                            account: "TEST:ABC 123".to_string(),
+                            amount: Amount { quantity: Decimal::new(120, 2), commodity: Commodity { name: "$".to_string(), position: CommodityPosition::Left }},
+                            status: None
+                        }
+                    ]
                 }
             ))
         );
