@@ -6,3 +6,5 @@ extern crate rust_decimal;
 pub use self::parser::*;
 
 pub mod parser;
+pub mod model;
+
