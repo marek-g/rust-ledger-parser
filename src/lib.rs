@@ -14,8 +14,11 @@ pub fn parse(input: &str) -> Result<Ledger, String> {
 
     let result = parser::parse_ledger_items(CompleteStr(input));
     match result {
-        Ok((_, result)) => {
+        Ok((CompleteStr(""), result)) => {
             Ok(model_internal::convert_items_to_ledger(result))
+        },
+        Ok((rest, _)) => {
+            Err(format!("Unable to parse: {}", rest))
         },
         Err(error) => {
             Err(format!("{:?}", error))
@@ -32,7 +35,7 @@ mod tests {
         let res = parse(r#"; Example 1
 
 P 2017-11-12 12:00:00 mBH 5.00 PLN
-fff
+
 ; Comment Line 1
 ; Comment Line 2
 2018-10-01=2018-10-14 ! (123) Marek Ogarek
