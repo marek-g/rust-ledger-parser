@@ -5,16 +5,10 @@ use chrono::{ NaiveDate, NaiveDateTime };
 use rust_decimal::Decimal;
 
 use model::*;
+use model_internal::*;
 
 pub enum CustomError {
     NonExistingDate
-}
-
-enum LedgerItem {
-    EmptyLine,
-    LineComment(String),
-    Transaction(Transaction),
-    CommodityPrice(CommodityPrice)
 }
 
 fn is_digit(c: char) -> bool {
@@ -283,6 +277,7 @@ named!(parse_transaction<CompleteStr, Transaction>,
         eol_or_eof >>
         postings: many1!(parse_posting) >>
         (Transaction {
+            comment: None,
             date: date,
             effective_date: effective_date,
             status: status,
@@ -293,7 +288,7 @@ named!(parse_transaction<CompleteStr, Transaction>,
     )
 );
 
-named!(parse_ledger_items<CompleteStr, Vec<LedgerItem>>,
+named!(pub parse_ledger_items<CompleteStr, Vec<LedgerItem>>,
     many0!(alt!(
         map!(parse_empty_line, |_| { LedgerItem::EmptyLine }) |
         map!(parse_line_comment, |comment: &str| { LedgerItem::LineComment(comment.to_string()) }) |
@@ -406,6 +401,7 @@ mod tests {
  TEST:ABC 123  $1.20"#)),
             Ok((CompleteStr(""),
                 Transaction {
+                    comment: None,
                     date: NaiveDate::from_ymd(2018, 10, 01),
                     effective_date: Some(NaiveDate::from_ymd(2018, 10, 14)),
                     status: Some(TransactionStatus::Pending),

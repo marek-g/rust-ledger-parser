@@ -15,6 +15,7 @@ pub struct Ledger {
 ///
 #[derive(Debug,PartialEq,Eq)]
 pub struct Transaction {
+    pub comment: Option<String>,
     pub date: NaiveDate,
     pub effective_date: Option<NaiveDate>,
     pub status: Option<TransactionStatus>,
