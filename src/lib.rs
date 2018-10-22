@@ -1,3 +1,5 @@
+//! Rust library for parsing ledger cli (https://www.ledger-cli.org/) input files.
+
 extern crate chrono;
 extern crate nom;
 extern crate rust_decimal;
@@ -8,6 +10,16 @@ mod parser;
 
 pub use model::*;
 
+/// Parses ledger-cli source.
+///
+/// # Examples
+///
+/// ```
+/// let result = parse(r#"; Example 1
+/// 2018-10-01=2018-10-14 ! (123) Marek Ogarek
+///  TEST:ABC 123  $1.20
+///  TEST:ABC 123  $1.20"#);
+/// ```
 pub fn parse(input: &str) -> Result<Ledger, String> {
     use nom::types::CompleteStr;
 

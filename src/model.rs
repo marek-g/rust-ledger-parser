@@ -2,7 +2,7 @@ use chrono::{NaiveDate, NaiveDateTime};
 use rust_decimal::Decimal;
 
 ///
-/// Ledger contains transactions and/or commodity prices.
+/// Main document. Contains transactions and/or commodity prices.
 ///
 #[derive(Debug, PartialEq, Eq)]
 pub struct Ledger {
