@@ -1,5 +1,7 @@
 # ledger-parser
 
+[![Crates.io Version](https://img.shields.io/crates/v/ledger-parser.svg)](https://crates.io/crates/ledger-parser)
+
 Rust library for parsing ledger cli (https://www.ledger-cli.org/) input files.
 
 ## Example
