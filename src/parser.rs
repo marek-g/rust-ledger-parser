@@ -263,7 +263,7 @@ named!(parse_transaction_status<CompleteStr, TransactionStatus>,
 );
 
 named!(parse_posting<CompleteStr, Posting>,
-    do_parse!(
+    complete!(do_parse!(
         white_spaces >>
         status: opt!(parse_transaction_status) >>
         opt!(white_spaces) >>
@@ -274,7 +274,7 @@ named!(parse_posting<CompleteStr, Posting>,
         comment: opt!(parse_inline_comment) >>
         eol_or_eof >>
         (Posting { account: account.to_string(), amount: amount, status: status, comment: comment.map(|c| c.to_string()) })
-    )
+    ))
 );
 
 named!(parse_transaction<CompleteStr, Transaction>,
@@ -643,8 +643,7 @@ P 2017-11-12 12:00:00 mBH 5.00 PLN
  TEST:ABC 123  $1.20
  TEST:ABC 123  $1.20
 "#,
-        ))
-        .unwrap()
+        )).unwrap()
         .1;
         assert_eq!(res.len(), 8);
         assert!(match res[0] {
