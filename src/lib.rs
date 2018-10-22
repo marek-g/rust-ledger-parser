@@ -1,4 +1,30 @@
-//! Rust library for parsing ledger cli (https://www.ledger-cli.org/) input files.
+//! Rust library for parsing [Ledger-cli](https://www.ledger-cli.org/) input files.
+//!
+//! Only a subset of the ledger-cli's file format is implemented.
+//!
+//! Supported elements:
+//!
+//! * Line comments (starting with: ``; # % | *``) except comments between postings
+//!
+//! * Inline comments (starting with ``;``)
+//!
+//! * Transaction headers with format:
+//!
+//!   ```
+//!   DATE[=EDATE] [*|!] [(CODE)] DESC
+//!   ```
+//!
+//! * Transaction postings with format (minimum two spaces or one tab between ``ACCOUNT`` and ``AMOUNT``):
+//!
+//!   ```
+//!     ACCOUNT  AMOUNT [; NOTE]
+//!   ```
+//!
+//! * Commodity prices with format:
+//!
+//!   ```
+//!   P DATE SYMBOL PRICE
+//!   ```
 
 extern crate chrono;
 extern crate nom;
