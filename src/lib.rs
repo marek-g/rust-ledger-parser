@@ -14,7 +14,7 @@ pub fn parse(input: &str) -> Result<Ledger, String> {
     let result = parser::parse_ledger_items(CompleteStr(input));
     match result {
         Ok((CompleteStr(""), result)) => Ok(model_internal::convert_items_to_ledger(result)),
-        Ok((rest, _)) => Err(format!("Unable to parse: {}", rest)),
+        Ok((rest, _)) => Err(rest.0.to_string()),
         Err(error) => Err(format!("{:?}", error)),
     }
 }
@@ -128,5 +128,10 @@ P 2017-11-12 12:00:00 mBH 5.00 PLN
                 }]
             })
         );
+    }
+
+    #[test]
+    fn parse_ledger_err_test() {
+        assert_eq!(parse("wrong input"), Err("wrong input".to_string()));
     }
 }
