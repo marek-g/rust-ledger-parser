@@ -1,6 +1,6 @@
 [package]
 name = "ledger-parser"
-version = "1.0.1"
+version = "2.0.0"
 authors = ["Marek G <marek@nomail.com>"]
 description = "Rust library for parsing ledger cli (https://www.ledger-cli.org/) input files."
 license = "Unlicense"
