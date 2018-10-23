@@ -4,7 +4,7 @@ use rust_decimal::Decimal;
 ///
 /// Main document. Contains transactions and/or commodity prices.
 ///
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Ledger {
     pub transactions: Vec<Transaction>,
     pub commodity_prices: Vec<CommodityPrice>,
@@ -13,7 +13,7 @@ pub struct Ledger {
 ///
 /// Transaction.
 ///
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Transaction {
     pub comment: Option<String>,
     pub date: NaiveDate,
@@ -24,13 +24,13 @@ pub struct Transaction {
     pub postings: Vec<Posting>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TransactionStatus {
     Pending,
     Cleared,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Posting {
     pub account: String,
     pub amount: Amount,
@@ -38,19 +38,19 @@ pub struct Posting {
     pub comment: Option<String>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Amount {
     pub quantity: Decimal,
     pub commodity: Commodity,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Commodity {
     pub name: String,
     pub position: CommodityPosition,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum CommodityPosition {
     Left,
     Right,
@@ -59,7 +59,7 @@ pub enum CommodityPosition {
 ///
 /// Commodity price.
 ///
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct CommodityPrice {
     pub datetime: NaiveDateTime,
     pub commodity_name: String,
