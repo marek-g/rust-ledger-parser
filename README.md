@@ -26,6 +26,8 @@ Supported elements:
     ACCOUNT  AMOUNT [; NOTE]
   ```
 
+  Note that the ``AMOUNT`` field is always required.
+
 * Commodity prices with format:
 
   ```
