@@ -2,8 +2,7 @@
 
 [![Crates.io Version](https://img.shields.io/crates/v/ledger-parser.svg)](https://crates.io/crates/ledger-parser)
 [![Docs.rs Version](https://docs.rs/ledger-parser/badge.svg)](https://docs.rs/ledger-parser)
-[![License Unlicense](https://img.shields.io/crates/l/ledger-parser.svg)]
-(http://unlicense.org/UNLICENSE)
+[![License Unlicense](https://img.shields.io/crates/l/ledger-parser.svg)](http://unlicense.org/UNLICENSE)
 
 Rust library for parsing [Ledger-cli](https://www.ledger-cli.org/) input files.
 
