@@ -1,5 +1,6 @@
 use chrono::{NaiveDate, NaiveDateTime};
 use rust_decimal::Decimal;
+use std::fmt;
 
 ///
 /// Main document. Contains transactions and/or commodity prices.
@@ -38,7 +39,7 @@ pub struct Posting {
     pub comment: Option<String>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct Amount {
     pub quantity: Decimal,
     pub commodity: Commodity,
@@ -64,4 +65,19 @@ pub struct CommodityPrice {
     pub datetime: NaiveDateTime,
     pub commodity_name: String,
     pub amount: Amount,
+}
+
+impl fmt::Display for Amount {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match self.commodity.position {
+            CommodityPosition::Left => write!(f, "{}{}", self.commodity.name, self.quantity),
+            CommodityPosition::Right => write!(f, "{} {}", self.quantity, self.commodity.name),
+        }
+    }
+}
+
+impl fmt::Debug for Amount {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        fmt::Display::fmt(self, f)
+    }
 }
