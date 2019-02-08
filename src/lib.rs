@@ -10,13 +10,13 @@
 //!
 //! * Transaction headers with format:
 //!
-//!   ```
+//!   ```ignore
 //!   DATE[=EDATE] [*|!] [(CODE)] DESC
 //!   ```
 //!
 //! * Transaction postings with format (minimum two spaces or one tab between ``ACCOUNT`` and ``AMOUNT``):
 //!
-//!   ```
+//!   ```ignore
 //!     ACCOUNT  AMOUNT [; NOTE]
 //!   ```
 //!
@@ -24,7 +24,7 @@
 //!
 //! * Commodity prices with format:
 //!
-//!   ```
+//!   ```ignore
 //!   P DATE SYMBOL PRICE
 //!   ```
 
@@ -42,7 +42,7 @@ pub use model::*;
 ///
 /// # Examples
 ///
-/// ```
+/// ```rust,ignore
 /// let result = parse(r#"; Example 1
 /// 2018-10-01=2018-10-14 ! (123) Marek Ogarek
 ///  TEST:ABC 123  $1.20
