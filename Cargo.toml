@@ -13,4 +13,4 @@ categories = ["parsing"]
 [dependencies]
 nom = "4"
 chrono = "0.4"
-rust_decimal = "0.10"
+rust_decimal = "0.11"

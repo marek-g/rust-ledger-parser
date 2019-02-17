@@ -42,6 +42,7 @@ pub use model::*;
 ///
 /// # Examples
 ///
+/// ```rust,ignore
 /// let result = ledger_parser::parse(r#"; Example 1
 /// 2018-10-01=2018-10-14 ! (123) Description
 ///   ; Transaction comment
