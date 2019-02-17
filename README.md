@@ -48,8 +48,3 @@ let result = ledger_parser::parse(r#"; Example 1
   ; Posting comment
   TEST:Account 345  -$1.20"#);
 ```
-
-## What's new
-
-* Implemented Display trait (thanks to Zoran Zaric)
-* Parsing comments followed by transaction and postings
