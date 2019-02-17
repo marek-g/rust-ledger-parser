@@ -4,7 +4,7 @@
 //!
 //! Supported elements:
 //!
-//! * Line comments (starting with: ``; # % | *``) except comments between postings
+//! * Line comments (starting with: ``; # % | *``)
 //!
 //! * Inline comments (starting with ``;``)
 //!
@@ -42,11 +42,12 @@ pub use model::*;
 ///
 /// # Examples
 ///
-/// ```rust,ignore
-/// let result = parse(r#"; Example 1
-/// 2018-10-01=2018-10-14 ! (123) Marek Ogarek
-///  TEST:ABC 123  $1.20
-///  TEST:ABC 123  $1.20"#);
+/// let result = ledger_parser::parse(r#"; Example 1
+/// 2018-10-01=2018-10-14 ! (123) Description
+///   ; Transaction comment
+///   TEST:Account 123  $1.20
+///   ; Posting comment
+///   TEST:Account 345  -$1.20"#);
 /// ```
 pub fn parse(input: &str) -> Result<Ledger, String> {
     use nom::types::CompleteStr;
@@ -75,8 +76,11 @@ P 2017-11-12 12:00:00 mBH 5.00 PLN
 
 ; Comment Line 1
 ; Comment Line 2
-2018-10-01=2018-10-14 ! (123) Marek Ogarek
- TEST:ABC 123  $1.20; dd
+2018-10-01=2018-10-14 ! (123) Marek Ogarek ; Comment Line 3
+; Comment Line 4
+; Comment Line 5
+ TEST:ABC 123  $1.20; Posting comment line 1
+ ; Posting comment line 2
  TEST:ABC 123  $1.20
 
 2018-10-01=2018-10-14 ! (123) Marek Ogarek
@@ -87,7 +91,7 @@ P 2017-11-12 12:00:00 mBH 5.00 PLN
             Ok(Ledger {
                 transactions: vec![
                     Transaction {
-                        comment: Some("Comment Line 1\nComment Line 2".to_string()),
+                        comment: Some("Comment Line 1\nComment Line 2\nComment Line 3\nComment Line 4\nComment Line 5".to_string()),
                         date: NaiveDate::from_ymd(2018, 10, 01),
                         effective_date: Some(NaiveDate::from_ymd(2018, 10, 14)),
                         status: Some(TransactionStatus::Pending),
@@ -104,7 +108,7 @@ P 2017-11-12 12:00:00 mBH 5.00 PLN
                                     }
                                 },
                                 status: None,
-                                comment: Some("dd".to_string())
+                                comment: Some("Posting comment line 1\nPosting comment line 2".to_string())
                             },
                             Posting {
                                 account: "TEST:ABC 123".to_string(),

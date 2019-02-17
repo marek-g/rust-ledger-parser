@@ -102,7 +102,9 @@ impl fmt::Display for Posting {
         write!(f, "{}  {}", self.account, self.amount)?;
 
         if let Some(ref comment) = self.comment {
-            write!(f, "  ; {}", comment)?;
+            for comment in comment.split("\n") {
+                write!(f, "\n  ; {}", comment)?;
+            }
         }
 
         Ok(())
@@ -222,7 +224,7 @@ mod tests {
                     comment: Some("asdf".to_string()),
                 }
             ),
-            "Assets:Checking  USD42.00  ; asdf"
+            "Assets:Checking  USD42.00\n  ; asdf"
         );
     }
 
@@ -268,7 +270,8 @@ mod tests {
         let expected = r#"2018-10-01=2018-10-14 ! (123) Marek Ogarek
   ; Comment Line 1
   ; Comment Line 2
-  TEST:ABC 123  $1.20  ; dd
+  TEST:ABC 123  $1.20
+  ; dd
   TEST:ABC 123  $1.20
 "#;
         assert_eq!(actual, expected);
@@ -384,7 +387,8 @@ mod tests {
         let expected = r#"2018-10-01=2018-10-14 ! (123) Marek Ogarek
   ; Comment Line 1
   ; Comment Line 2
-  TEST:ABC 123  $1.20  ; dd
+  TEST:ABC 123  $1.20
+  ; dd
   TEST:ABC 123  $1.20
 
 2018-10-01=2018-10-14 ! (123) Marek Ogarek

@@ -12,7 +12,7 @@ Only a subset of the ledger-cli's file format is implemented.
 
 Supported elements:
 
-* Line comments (starting with: ``; # % | *``) except comments between postings
+* Line comments (starting with: ``; # % | *``)
 
 * Inline comments (starting with ``;``)
 
@@ -42,7 +42,14 @@ Supported elements:
 extern crate ledger_parser;
 
 let result = ledger_parser::parse(r#"; Example 1
-2018-10-01=2018-10-14 ! (123) Marek Ogarek
-  TEST:ABC 123  $1.20
-  TEST:ABC 123  $1.20"#);
+2018-10-01=2018-10-14 ! (123) Description
+  ; Transaction comment
+  TEST:Account 123  $1.20
+  ; Posting comment
+  TEST:Account 345  -$1.20"#);
 ```
+
+## What's new
+
+* Implemented Display trait (thanks to Zoran Zaric)
+* Parsing comments followed by transaction and postings

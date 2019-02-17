@@ -31,6 +31,29 @@ fn is_not_eol_char(c: char) -> bool {
     (c != '\r' && c != '\n')
 }
 
+fn is_not_eol_or_comment_char(c: char) -> bool {
+    (c != '\r' && c != '\n' && c != ';')
+}
+
+fn join_comments(inline_comment: Option<&str>, line_comments: Vec<&str>) -> Option<String> {
+    if let Some(ref inline) = inline_comment {
+        if line_comments.len() == 0 {
+            inline_comment.map(|s| s.to_string())
+        } else {
+            let mut full = inline.to_string();
+            full.push_str("\n");
+            full.push_str(&line_comments.join("\n"));
+            Some(full)
+        }
+    } else {
+        if line_comments.len() == 0 {
+            None
+        } else {
+            Some(line_comments.join("\n"))
+        }
+    }
+}
+
 named!(white_spaces<CompleteStr, CompleteStr>,
     take_while1!(is_white_char)
 );
@@ -271,9 +294,15 @@ named!(parse_posting<CompleteStr, Posting>,
         white_spaces >>
         amount: parse_amount >>
         opt!(white_spaces) >>
-        comment: opt!(parse_inline_comment) >>
+        inline_comment: opt!(parse_inline_comment) >>
         eol_or_eof >>
-        (Posting { account: account.to_string(), amount: amount, status: status, comment: comment.map(|c| c.to_string()) })
+        line_comments: many0!(parse_line_comment) >>
+        (Posting {
+            account: account.to_string(),
+            amount: amount,
+            status: status,
+            comment: join_comments(inline_comment, line_comments),
+        })
     ))
 );
 
@@ -291,12 +320,14 @@ named!(parse_transaction<CompleteStr, Transaction>,
         code: opt!(map!(delimited!(char!('('), is_not!(")"), char!(')')),
             |s: CompleteStr| { s.0.to_string() })) >>
         opt!(white_spaces) >>
-        description: map!(take_while!(is_not_eol_char),
-            |s: CompleteStr| { s.0.to_string() }) >>
+        description: map!(take_while!(is_not_eol_or_comment_char),
+            |s: CompleteStr| { s.0.trim_end().to_string() }) >>
+        inline_comment: opt!(parse_inline_comment) >>
         eol_or_eof >>
+        line_comments: many0!(parse_line_comment) >>
         postings: many1!(parse_posting) >>
         (Transaction {
-            comment: None,
+            comment: join_comments(inline_comment, line_comments),
             date: date,
             effective_date: effective_date,
             status: status,
@@ -560,7 +591,7 @@ mod tests {
             ))
         );
         assert_eq!(
-            parse_posting(CompleteStr(" ! TEST:ABC 123  $1.20;test")),
+            parse_posting(CompleteStr(" ! TEST:ABC 123  $1.20;test\n;comment line 2")),
             Ok((
                 CompleteStr(""),
                 Posting {
@@ -573,7 +604,7 @@ mod tests {
                         }
                     },
                     status: Some(TransactionStatus::Pending),
-                    comment: Some("test".to_string())
+                    comment: Some("test\ncomment line 2".to_string())
                 }
             ))
         );

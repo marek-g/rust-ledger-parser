@@ -27,7 +27,16 @@ pub fn convert_items_to_ledger(items: Vec<LedgerItem>) -> Ledger {
                 }
             }
             LedgerItem::Transaction(mut transaction) => {
-                transaction.comment = current_comment.take();
+                if let Some(current_comment) = current_comment {
+                    let mut full_comment = current_comment;
+                    if let Some(ref transaction_comment) = transaction.comment {
+                        full_comment.push_str("\n");
+                        full_comment.push_str(&transaction_comment);
+                    }
+                    transaction.comment = Some(full_comment);
+                }
+                current_comment = None;
+
                 transactions.push(transaction);
             }
             LedgerItem::CommodityPrice(commodity_price) => {
