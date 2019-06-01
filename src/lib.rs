@@ -101,25 +101,25 @@ P 2017-11-12 12:00:00 mBH 5.00 PLN
                         postings: vec![
                             Posting {
                                 account: "TEST:ABC 123".to_string(),
-                                amount: Amount {
+                                amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
                                         name: "$".to_string(),
                                         position: CommodityPosition::Left
                                     }
-                                },
+                                }),
                                 status: None,
                                 comment: Some("Posting comment line 1\nPosting comment line 2".to_string())
                             },
                             Posting {
                                 account: "TEST:ABC 123".to_string(),
-                                amount: Amount {
+                                amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
                                         name: "$".to_string(),
                                         position: CommodityPosition::Left
                                     }
-                                },
+                                }),
                                 status: None,
                                 comment: None
                             }
@@ -135,25 +135,25 @@ P 2017-11-12 12:00:00 mBH 5.00 PLN
                         postings: vec![
                             Posting {
                                 account: "TEST:ABC 123".to_string(),
-                                amount: Amount {
+                                amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
                                         name: "$".to_string(),
                                         position: CommodityPosition::Left
                                     }
-                                },
+                                }),
                                 status: None,
                                 comment: None
                             },
                             Posting {
                                 account: "TEST:ABC 123".to_string(),
-                                amount: Amount {
+                                amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
                                         name: "$".to_string(),
                                         position: CommodityPosition::Left
                                     }
-                                },
+                                }),
                                 status: None,
                                 comment: None
                             }

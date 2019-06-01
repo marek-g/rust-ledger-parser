@@ -28,7 +28,7 @@ Supported elements:
     ACCOUNT  AMOUNT [; NOTE]
   ```
 
-  Note that the ``AMOUNT`` field is always required.
+  There may be a single posting without an amount in a transaction.
 
 * Commodity prices with format:
 
