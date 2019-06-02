@@ -139,14 +139,22 @@ pub fn parse_datetime(text: CompleteStr) -> IResult<CompleteStr, NaiveDateTime> 
 
 named!(parse_quantity<CompleteStr, Decimal>,
     map_res!(
-        recognize!(
-            tuple!(
-                opt!(tag!("-")),
-                digit,
-                opt!(tuple!(tag!("."), digit))
-            )
+        do_parse!(
+                sign: opt!(tag!("-")) >>
+                decimal: do_parse!(
+                    leading: take_while_m_n!(1, 3, is_digit) >>
+                    rest: alt!(
+                        map!(
+                            many1!(
+                                preceded!(tag!(","),
+                                    map!(take_while_m_n!(3, 3, is_digit), |group| group.to_string()))), |groups| groups.join("")) |
+                        map!(digit0, |d| d.to_string())) >>
+                    (format!("{}{}", leading, rest))
+                ) >>
+                fractional: opt!(recognize!(preceded!(tag!("."), digit))) >>
+                (format!("{}{}{}", sign.unwrap_or_else(|| CompleteStr("")), decimal, fractional.unwrap_or_else(|| CompleteStr(""))))
         ),
-        |s: CompleteStr| { Decimal::from_str(s.0) }
+        |s: String| Decimal::from_str(&s)
     )
 );
 
@@ -444,6 +452,10 @@ mod tests {
     #[test]
     fn parse_quantity_test() {
         assert_eq!(
+            parse_quantity(CompleteStr("1000")),
+            Ok((CompleteStr(""), Decimal::new(1000, 0)))
+        );
+        assert_eq!(
             parse_quantity(CompleteStr("2.02")),
             Ok((CompleteStr(""), Decimal::new(202, 2)))
         );
@@ -458,6 +470,18 @@ mod tests {
         assert_eq!(
             parse_quantity(CompleteStr("3")),
             Ok((CompleteStr(""), Decimal::new(3, 0)))
+        );
+        assert_eq!(
+            parse_quantity(CompleteStr("1")),
+            Ok((CompleteStr(""), Decimal::new(1, 0)))
+        );
+        assert_eq!(
+            parse_quantity(CompleteStr("1,000")),
+            Ok((CompleteStr(""), Decimal::new(1000, 0)))
+        );
+        assert_eq!(
+            parse_quantity(CompleteStr("12,456,132.14")),
+            Ok((CompleteStr(""), Decimal::new(1245613214, 2)))
         );
     }
 
