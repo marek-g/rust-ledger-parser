@@ -17,12 +17,8 @@ fn is_digit(c: char) -> bool {
     (c >= '0' && c <= '9')
 }
 
-fn is_commodity_first_char(c: char) -> bool {
-    (c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '$' || c > 0x7F as char)
-}
-
 fn is_commodity_char(c: char) -> bool {
-    (c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '$' || c > 0x7F as char)
+    !(('0' <= c && c <= '9') || c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '-')
 }
 
 fn is_white_char(c: char) -> bool {
@@ -167,12 +163,7 @@ named!(string_between_quotes<CompleteStr, &str>,
 
 named!(commodity_without_quotes<CompleteStr, &str>,
     map!(
-        recognize!(
-            tuple!(
-                take_while_m_n!(1, 1, is_commodity_first_char),
-                take_while!(is_commodity_char)
-            )
-        ),
+        take_while1!(is_commodity_char),
         |s: CompleteStr| { s.0 }
     )
 );
@@ -498,6 +489,18 @@ mod tests {
         assert_eq!(
             parse_commodity(CompleteStr("$1")),
             Ok((CompleteStr("1"), "$"))
+        );
+        assert_eq!(
+            parse_commodity(CompleteStr("€1")),
+            Ok((CompleteStr("1"), "€"))
+        );
+        assert_eq!(
+            parse_commodity(CompleteStr("€ ")),
+            Ok((CompleteStr(" "), "€"))
+        );
+        assert_eq!(
+            parse_commodity(CompleteStr("€-1")),
+            Ok((CompleteStr("-1"), "€"))
         );
     }
 
