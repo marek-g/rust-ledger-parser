@@ -92,14 +92,17 @@ impl fmt::Display for TransactionStatus {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Posting {
     pub account: String,
-    pub amount: Amount,
+    pub amount: Option<Amount>,
     pub status: Option<TransactionStatus>,
     pub comment: Option<String>,
 }
 
 impl fmt::Display for Posting {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}  {}", self.account, self.amount)?;
+        write!(f, "{}", self.account)?;
+        if let Some(ref amount) = self.amount {
+            write!(f, "  {}", amount)?;
+        }
 
         if let Some(ref comment) = self.comment {
             for comment in comment.split("\n") {
@@ -213,13 +216,13 @@ mod tests {
                 "{}",
                 Posting {
                     account: "Assets:Checking".to_string(),
-                    amount: Amount {
+                    amount: Some(Amount {
                         quantity: Decimal::new(4200, 2),
                         commodity: Commodity {
                             name: "USD".to_string(),
                             position: CommodityPosition::Left,
                         }
-                    },
+                    }),
                     status: None,
                     comment: Some("asdf".to_string()),
                 }
@@ -242,25 +245,25 @@ mod tests {
                 postings: vec![
                     Posting {
                         account: "TEST:ABC 123".to_string(),
-                        amount: Amount {
+                        amount: Some(Amount {
                             quantity: Decimal::new(120, 2),
                             commodity: Commodity {
                                 name: "$".to_string(),
                                 position: CommodityPosition::Left
                             }
-                        },
+                        }),
                         status: None,
                         comment: Some("dd".to_string())
                     },
                     Posting {
                         account: "TEST:ABC 123".to_string(),
-                        amount: Amount {
+                        amount: Some(Amount {
                             quantity: Decimal::new(120, 2),
                             commodity: Commodity {
                                 name: "$".to_string(),
                                 position: CommodityPosition::Left
                             }
-                        },
+                        }),
                         status: None,
                         comment: None
                     }
@@ -312,25 +315,25 @@ mod tests {
                         postings: vec![
                             Posting {
                                 account: "TEST:ABC 123".to_string(),
-                                amount: Amount {
+                                amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
                                         name: "$".to_string(),
                                         position: CommodityPosition::Left
                                     }
-                                },
+                                }),
                                 status: None,
                                 comment: Some("dd".to_string())
                             },
                             Posting {
                                 account: "TEST:ABC 123".to_string(),
-                                amount: Amount {
+                                amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
                                         name: "$".to_string(),
                                         position: CommodityPosition::Left
                                     }
-                                },
+                                }),
                                 status: None,
                                 comment: None
                             }
@@ -346,25 +349,25 @@ mod tests {
                         postings: vec![
                             Posting {
                                 account: "TEST:ABC 123".to_string(),
-                                amount: Amount {
+                                amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
                                         name: "$".to_string(),
                                         position: CommodityPosition::Left
                                     }
-                                },
+                                }),
                                 status: None,
                                 comment: None
                             },
                             Posting {
                                 account: "TEST:ABC 123".to_string(),
-                                amount: Amount {
+                                amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
                                         name: "$".to_string(),
                                         position: CommodityPosition::Left
                                     }
-                                },
+                                }),
                                 status: None,
                                 comment: None
                             }
