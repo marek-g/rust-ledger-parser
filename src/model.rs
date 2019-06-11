@@ -93,6 +93,7 @@ impl fmt::Display for TransactionStatus {
 pub struct Posting {
     pub account: String,
     pub amount: Amount,
+    pub balance: Option<Amount>,
     pub status: Option<TransactionStatus>,
     pub comment: Option<String>,
 }
@@ -103,6 +104,9 @@ impl fmt::Display for Posting {
             write!(f, "{} ", *status)?;
         }
         write!(f, "{}  {}", self.account, self.amount)?;
+        if let Some(ref balance) = self.balance {
+            write!(f, " ={}", *balance)?;
+        }
 
         if let Some(ref comment) = self.comment {
             for comment in comment.split("\n") {
@@ -223,11 +227,18 @@ mod tests {
                             position: CommodityPosition::Left,
                         }
                     },
+                    balance: Some(Amount {
+                        quantity: Decimal::new(5000, 2),
+                        commodity: Commodity {
+                            name: "USD".to_string(),
+                            position: CommodityPosition::Left,
+                        }
+                    }),
                     status: Some(TransactionStatus::Cleared),
                     comment: Some("asdf".to_string()),
                 }
             ),
-            "* Assets:Checking  USD42.00\n  ; asdf"
+            "* Assets:Checking  USD42.00 =USD50.00\n  ; asdf"
         );
     }
 
@@ -252,6 +263,7 @@ mod tests {
                                 position: CommodityPosition::Left
                             }
                         },
+                        balance: None,
                         status: None,
                         comment: Some("dd".to_string())
                     },
@@ -264,6 +276,7 @@ mod tests {
                                 position: CommodityPosition::Left
                             }
                         },
+                        balance: None,
                         status: None,
                         comment: None
                     }
@@ -322,6 +335,7 @@ mod tests {
                                         position: CommodityPosition::Left
                                     }
                                 },
+                                balance: None,
                                 status: None,
                                 comment: Some("dd".to_string())
                             },
@@ -334,6 +348,7 @@ mod tests {
                                         position: CommodityPosition::Left
                                     }
                                 },
+                                balance: None,
                                 status: None,
                                 comment: None
                             }
@@ -356,6 +371,7 @@ mod tests {
                                         position: CommodityPosition::Left
                                     }
                                 },
+                                balance: None,
                                 status: None,
                                 comment: None
                             },
@@ -368,6 +384,7 @@ mod tests {
                                         position: CommodityPosition::Left
                                     }
                                 },
+                                balance: None,
                                 status: None,
                                 comment: None
                             }
