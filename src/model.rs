@@ -99,6 +99,9 @@ pub struct Posting {
 
 impl fmt::Display for Posting {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(ref status) = self.status {
+            write!(f, "{} ", *status)?;
+        }
         write!(f, "{}  {}", self.account, self.amount)?;
 
         if let Some(ref comment) = self.comment {
@@ -220,11 +223,11 @@ mod tests {
                             position: CommodityPosition::Left,
                         }
                     },
-                    status: None,
+                    status: Some(TransactionStatus::Cleared),
                     comment: Some("asdf".to_string()),
                 }
             ),
-            "Assets:Checking  USD42.00\n  ; asdf"
+            "* Assets:Checking  USD42.00\n  ; asdf"
         );
     }
 
