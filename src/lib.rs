@@ -82,7 +82,7 @@ P 2017-11-12 12:00:00 mBH 5.00 PLN
 ; Comment Line 5
  TEST:ABC 123  $1.20; Posting comment line 1
  ; Posting comment line 2
- TEST:ABC 123  $1.20
+ TEST:ABC 123  $1.20 = $2.40
 
 2018-10-01=2018-10-14 ! (123) Marek Ogarek
  TEST:ABC 123  $1.20
@@ -108,6 +108,7 @@ P 2017-11-12 12:00:00 mBH 5.00 PLN
                                         position: CommodityPosition::Left
                                     }
                                 },
+                                balance: None,
                                 status: None,
                                 comment: Some("Posting comment line 1\nPosting comment line 2".to_string())
                             },
@@ -120,6 +121,13 @@ P 2017-11-12 12:00:00 mBH 5.00 PLN
                                         position: CommodityPosition::Left
                                     }
                                 },
+                                balance: Some(Amount{
+                                    quantity: Decimal::new(240, 2),
+                                    commodity: Commodity {
+                                        name: "$".to_string(),
+                                        position: CommodityPosition::Left
+                                    }
+                                }),
                                 status: None,
                                 comment: None
                             }
@@ -142,6 +150,7 @@ P 2017-11-12 12:00:00 mBH 5.00 PLN
                                         position: CommodityPosition::Left
                                     }
                                 },
+                                balance: None,
                                 status: None,
                                 comment: None
                             },
@@ -154,6 +163,7 @@ P 2017-11-12 12:00:00 mBH 5.00 PLN
                                         position: CommodityPosition::Left
                                     }
                                 },
+                                balance: None,
                                 status: None,
                                 comment: None
                             }

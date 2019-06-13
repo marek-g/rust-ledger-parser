@@ -205,6 +205,15 @@ named!(parse_amount<CompleteStr, Amount>,
     )
 );
 
+named!(parse_balance<CompleteStr, Amount>,
+	do_parse!(
+		tag!("=") >>
+		opt!(white_spaces) >>
+		amount: parse_amount >>
+		(amount)
+	)
+);
+
 named!(parse_commodity_price<CompleteStr, CommodityPrice>,
     do_parse!(
         tag!("P") >>
@@ -294,12 +303,15 @@ named!(parse_posting<CompleteStr, Posting>,
         white_spaces >>
         amount: parse_amount >>
         opt!(white_spaces) >>
+        balance: opt!(parse_balance) >>
+        opt!(white_spaces) >>
         inline_comment: opt!(parse_inline_comment) >>
         eol_or_eof >>
         line_comments: many0!(parse_line_comment) >>
         (Posting {
             account: account.to_string(),
             amount: amount,
+            balance: balance,
             status: status,
             comment: join_comments(inline_comment, line_comments),
         })
@@ -585,6 +597,7 @@ mod tests {
                             position: CommodityPosition::Left
                         }
                     },
+                    balance: None,
                     status: None,
                     comment: None,
                 }
@@ -603,8 +616,34 @@ mod tests {
                             position: CommodityPosition::Left
                         }
                     },
+                    balance: None,
                     status: Some(TransactionStatus::Pending),
                     comment: Some("test\ncomment line 2".to_string())
+                }
+            ))
+        );
+        assert_eq!(
+            parse_posting(CompleteStr(" TEST:ABC 123  $1.20 =$2.40 ;comment")),
+            Ok((
+                CompleteStr(""),
+                Posting {
+                    account: "TEST:ABC 123".to_string(),
+                    amount: Amount {
+                        quantity: Decimal::new(120, 2),
+                        commodity: Commodity {
+                            name: "$".to_string(),
+                            position: CommodityPosition::Left
+                        }
+                    },
+                    balance: Some(Amount {
+                        quantity: Decimal::new(240, 2),
+                        commodity: Commodity {
+                            name: "$".to_string(),
+                            position: CommodityPosition::Left
+                        }
+                    }),
+                    status: None,
+                    comment: Some("comment".to_string())
                 }
             ))
         );
@@ -637,6 +676,7 @@ mod tests {
                                     position: CommodityPosition::Left
                                 }
                             },
+                            balance: None,
                             status: None,
                             comment: Some("test".to_string()),
                         },
@@ -649,6 +689,7 @@ mod tests {
                                     position: CommodityPosition::Left
                                 }
                             },
+                            balance: None,
                             status: None,
                             comment: None,
                         }
@@ -674,7 +715,8 @@ P 2017-11-12 12:00:00 mBH 5.00 PLN
  TEST:ABC 123  $1.20
  TEST:ABC 123  $1.20
 "#,
-        )).unwrap()
+        ))
+        .unwrap()
         .1;
         assert_eq!(res.len(), 8);
         assert!(match res[0] {
