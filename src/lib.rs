@@ -17,7 +17,7 @@
 //! * Transaction postings with format (minimum two spaces or one tab between ``ACCOUNT`` and ``AMOUNT``):
 //!
 //!   ```ignore
-//!     ACCOUNT  AMOUNT [; NOTE]
+//!     ACCOUNT  AMOUNT [= BALANCE] [; NOTE]
 //!   ```
 //!
 //!   Note that the ``AMOUNT`` field is always required.
@@ -121,13 +121,13 @@ P 2017-11-12 12:00:00 mBH 5.00 PLN
                                         position: CommodityPosition::Left
                                     }
                                 },
-                                balance: Some(Amount{
+                                balance: Some(Balance::Amount(Amount {
                                     quantity: Decimal::new(240, 2),
                                     commodity: Commodity {
                                         name: "$".to_string(),
                                         position: CommodityPosition::Left
                                     }
-                                }),
+                                })),
                                 status: None,
                                 comment: None
                             }

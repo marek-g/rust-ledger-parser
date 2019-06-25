@@ -205,13 +205,18 @@ named!(parse_amount<CompleteStr, Amount>,
     )
 );
 
-named!(parse_balance<CompleteStr, Amount>,
-	do_parse!(
-		tag!("=") >>
-		opt!(white_spaces) >>
-		amount: parse_amount >>
-		(amount)
-	)
+named!(parse_balance<CompleteStr, Balance>,
+    alt!(
+        do_parse!(
+            amount: parse_amount >>
+            (Balance::Amount(amount))
+        )
+        |
+        do_parse!(
+            tag!("0") >>
+            (Balance::Zero)
+        )
+    )
 );
 
 named!(parse_commodity_price<CompleteStr, CommodityPrice>,
@@ -303,7 +308,12 @@ named!(parse_posting<CompleteStr, Posting>,
         white_spaces >>
         amount: parse_amount >>
         opt!(white_spaces) >>
-        balance: opt!(parse_balance) >>
+        balance:  opt!(do_parse!(
+            tag!("=") >>
+            opt!(white_spaces) >>
+            balance: parse_balance >>
+            (balance)
+        )) >>
         opt!(white_spaces) >>
         inline_comment: opt!(parse_inline_comment) >>
         eol_or_eof >>
@@ -534,6 +544,40 @@ mod tests {
     }
 
     #[test]
+    fn parse_balance_test() {
+        assert_eq!(
+            parse_balance(CompleteStr("$1.20")),
+            Ok((
+                CompleteStr(""),
+                Balance::Amount(Amount {
+                    quantity: Decimal::new(120, 2),
+                    commodity: Commodity {
+                        name: "$".to_string(),
+                        position: CommodityPosition::Left
+                    }
+                })
+            ))
+        );
+        assert_eq!(
+            parse_balance(CompleteStr("0 PLN")),
+            Ok((
+                CompleteStr(""),
+                Balance::Amount(Amount {
+                    quantity: Decimal::new(0, 0),
+                    commodity: Commodity {
+                        name: "PLN".to_string(),
+                        position: CommodityPosition::Right
+                    }
+                })
+            ))
+        );
+        assert_eq!(
+            parse_balance(CompleteStr("0")),
+            Ok((CompleteStr(""), Balance::Zero))
+        );
+    }
+
+    #[test]
     fn parse_commodity_price_test() {
         assert_eq!(
             parse_commodity_price(CompleteStr("P 2017-11-12 12:00:00 mBH 5.00 PLN\r\n")),
@@ -623,7 +667,7 @@ mod tests {
             ))
         );
         assert_eq!(
-            parse_posting(CompleteStr(" TEST:ABC 123  $1.20 =$2.40 ;comment")),
+            parse_posting(CompleteStr(" TEST:ABC 123  $1.20 = $2.40 ;comment")),
             Ok((
                 CompleteStr(""),
                 Posting {
@@ -635,13 +679,13 @@ mod tests {
                             position: CommodityPosition::Left
                         }
                     },
-                    balance: Some(Amount {
+                    balance: Some(Balance::Amount(Amount {
                         quantity: Decimal::new(240, 2),
                         commodity: Commodity {
                             name: "$".to_string(),
                             position: CommodityPosition::Left
                         }
-                    }),
+                    })),
                     status: None,
                     comment: Some("comment".to_string())
                 }

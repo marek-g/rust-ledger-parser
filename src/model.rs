@@ -93,7 +93,7 @@ impl fmt::Display for TransactionStatus {
 pub struct Posting {
     pub account: String,
     pub amount: Amount,
-    pub balance: Option<Amount>,
+    pub balance: Option<Balance>,
     pub status: Option<TransactionStatus>,
     pub comment: Option<String>,
 }
@@ -103,9 +103,11 @@ impl fmt::Display for Posting {
         if let Some(ref status) = self.status {
             write!(f, "{} ", *status)?;
         }
+
         write!(f, "{}  {}", self.account, self.amount)?;
+
         if let Some(ref balance) = self.balance {
-            write!(f, " ={}", *balance)?;
+            write!(f, " = {}", *balance)?;
         }
 
         if let Some(ref comment) = self.comment {
@@ -125,7 +127,7 @@ pub struct Amount {
 }
 
 impl fmt::Display for Amount {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.commodity.position {
             CommodityPosition::Left => write!(f, "{}{}", self.commodity.name, self.quantity),
             CommodityPosition::Right => write!(f, "{} {}", self.quantity, self.commodity.name),
@@ -149,6 +151,21 @@ pub struct Commodity {
 pub enum CommodityPosition {
     Left,
     Right,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum Balance {
+    Zero,
+    Amount(Amount),
+}
+
+impl fmt::Display for Balance {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Balance::Zero => write!(f, "0"),
+            Balance::Amount(ref balance) => write!(f, "{}", *balance),
+        }
+    }
 }
 
 ///
@@ -214,6 +231,24 @@ mod tests {
     }
 
     #[test]
+    fn display_balance() {
+        assert_eq!(
+            format!(
+                "{}",
+                Balance::Amount(Amount {
+                    quantity: Decimal::new(4200, 2),
+                    commodity: Commodity {
+                        name: "€".to_string(),
+                        position: CommodityPosition::Right,
+                    }
+                })
+            ),
+            "42.00 €"
+        );
+        assert_eq!(format!("{}", Balance::Zero), "0");
+    }
+
+    #[test]
     fn display_posting() {
         assert_eq!(
             format!(
@@ -227,18 +262,18 @@ mod tests {
                             position: CommodityPosition::Left,
                         }
                     },
-                    balance: Some(Amount {
+                    balance: Some(Balance::Amount(Amount {
                         quantity: Decimal::new(5000, 2),
                         commodity: Commodity {
                             name: "USD".to_string(),
                             position: CommodityPosition::Left,
                         }
-                    }),
+                    })),
                     status: Some(TransactionStatus::Cleared),
                     comment: Some("asdf".to_string()),
                 }
             ),
-            "* Assets:Checking  USD42.00 =USD50.00\n  ; asdf"
+            "* Assets:Checking  USD42.00 = USD50.00\n  ; asdf"
         );
     }
 
@@ -292,6 +327,7 @@ mod tests {
 "#;
         assert_eq!(actual, expected);
     }
+
     #[test]
     fn display_commodity_price() {
         let actual = format!(
