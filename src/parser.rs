@@ -62,28 +62,28 @@ named!(eol_or_eof<CompleteStr, CompleteStr>,
     alt!(eol | eof!())
 );
 
-named_args!(numberN(n: usize)<CompleteStr, i32>,
+named_args!(number_n(n: usize)<CompleteStr, i32>,
     map_res!(take_while_m_n!(n, n, is_digit), |s: CompleteStr| { i32::from_str(s.0) })
 );
 
 named!(parse_date_internal<CompleteStr, (i32, i32, i32)>,
     do_parse!(
-        year: call!(numberN, 4) >>
+        year: call!(number_n, 4) >>
         alt!(tag!("-") | tag!("/") | tag!(".")) >>
-        month: call!(numberN, 2) >>
+        month: call!(number_n, 2) >>
         alt!(tag!("-") | tag!("/") | tag!(".")) >>
-        day: call!(numberN, 2) >>
+        day: call!(number_n, 2) >>
         ((year, month, day))
     )
 );
 
 named!(parse_time_internal<CompleteStr, (i32, i32, i32)>,
     do_parse!(
-        hour: call!(numberN, 2) >>
+        hour: call!(number_n, 2) >>
         tag!(":") >>
-        min: call!(numberN, 2) >>
+        min: call!(number_n, 2) >>
         tag!(":") >>
-        sec: call!(numberN, 2) >>
+        sec: call!(number_n, 2) >>
         ((hour, min, sec))
     )
 );
