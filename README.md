@@ -25,7 +25,7 @@ Supported elements:
 * Transaction postings with format (minimum two spaces or one tab between ``ACCOUNT`` and ``AMOUNT``):
 
   ```
-    ACCOUNT  AMOUNT [; NOTE]
+    ACCOUNT  AMOUNT [= BALANCE] [; NOTE]
   ```
 
   There may be a single posting without an amount in a transaction.

@@ -60,28 +60,28 @@ named!(eol_or_eof<CompleteStr, CompleteStr>,
     alt!(eol | eof!())
 );
 
-named_args!(numberN(n: usize)<CompleteStr, i32>,
+named_args!(number_n(n: usize)<CompleteStr, i32>,
     map_res!(take_while_m_n!(n, n, is_digit), |s: CompleteStr| { i32::from_str(s.0) })
 );
 
 named!(parse_date_internal<CompleteStr, (i32, i32, i32)>,
     do_parse!(
-        year: call!(numberN, 4) >>
+        year: call!(number_n, 4) >>
         alt!(tag!("-") | tag!("/") | tag!(".")) >>
-        month: call!(numberN, 2) >>
+        month: call!(number_n, 2) >>
         alt!(tag!("-") | tag!("/") | tag!(".")) >>
-        day: call!(numberN, 2) >>
+        day: call!(number_n, 2) >>
         ((year, month, day))
     )
 );
 
 named!(parse_time_internal<CompleteStr, (i32, i32, i32)>,
     do_parse!(
-        hour: call!(numberN, 2) >>
+        hour: call!(number_n, 2) >>
         tag!(":") >>
-        min: call!(numberN, 2) >>
+        min: call!(number_n, 2) >>
         tag!(":") >>
-        sec: call!(numberN, 2) >>
+        sec: call!(number_n, 2) >>
         ((hour, min, sec))
     )
 );
@@ -206,6 +206,20 @@ named!(parse_amount<CompleteStr, Amount>,
     )
 );
 
+named!(parse_balance<CompleteStr, Balance>,
+    alt!(
+        do_parse!(
+            amount: parse_amount >>
+            (Balance::Amount(amount))
+        )
+        |
+        do_parse!(
+            tag!("0") >>
+            (Balance::Zero)
+        )
+    )
+);
+
 named!(parse_commodity_price<CompleteStr, CommodityPrice>,
     do_parse!(
         tag!("P") >>
@@ -254,7 +268,7 @@ pub fn parse_account(text: CompleteStr) -> IResult<CompleteStr, &str> {
         if c == '\t' || c == '\r' || c == '\n' || c == ';' {
             if pos > 0 {
                 let (rest, found) = text.take_split(pos);
-                return Ok((rest, found.0.trim_right()));
+                return Ok((rest, found.0.trim_end()));
             } else {
                 return Err(Err::Incomplete(Needed::Size(1)));
             }
@@ -302,12 +316,20 @@ named!(parse_posting<CompleteStr, Posting>,
                 opt!(white_spaces) >>
                 (None))
         ) >>
+        balance:  opt!(do_parse!(
+            tag!("=") >>
+            opt!(white_spaces) >>
+            balance: parse_balance >>
+            (balance)
+        )) >>
+        opt!(white_spaces) >>
         inline_comment: opt!(parse_inline_comment) >>
         eol_or_eof >>
         line_comments: many0!(parse_line_comment) >>
         (Posting {
             account: account.to_string(),
             amount: amount,
+            balance: balance,
             status: status,
             comment: join_comments(inline_comment, line_comments),
         })
@@ -587,6 +609,40 @@ mod tests {
     }
 
     #[test]
+    fn parse_balance_test() {
+        assert_eq!(
+            parse_balance(CompleteStr("$1.20")),
+            Ok((
+                CompleteStr(""),
+                Balance::Amount(Amount {
+                    quantity: Decimal::new(120, 2),
+                    commodity: Commodity {
+                        name: "$".to_string(),
+                        position: CommodityPosition::Left
+                    }
+                })
+            ))
+        );
+        assert_eq!(
+            parse_balance(CompleteStr("0 PLN")),
+            Ok((
+                CompleteStr(""),
+                Balance::Amount(Amount {
+                    quantity: Decimal::new(0, 0),
+                    commodity: Commodity {
+                        name: "PLN".to_string(),
+                        position: CommodityPosition::Right
+                    }
+                })
+            ))
+        );
+        assert_eq!(
+            parse_balance(CompleteStr("0")),
+            Ok((CompleteStr(""), Balance::Zero))
+        );
+    }
+
+    #[test]
     fn parse_commodity_price_test() {
         assert_eq!(
             parse_commodity_price(CompleteStr("P 2017-11-12 12:00:00 mBH 5.00 PLN\r\n")),
@@ -650,6 +706,7 @@ mod tests {
                             position: CommodityPosition::Left
                         }
                     }),
+                    balance: None,
                     status: None,
                     comment: None,
                 }
@@ -668,6 +725,7 @@ mod tests {
                             position: CommodityPosition::Left
                         }
                     }),
+                    balance: None,
                     status: Some(TransactionStatus::Pending),
                     comment: Some("test\ncomment line 2".to_string())
                 }
@@ -680,6 +738,7 @@ mod tests {
                 Posting {
                     account: "TEST:ABC 123".to_string(),
                     amount: None,
+                    balance: None,
                     status: Some(TransactionStatus::Pending),
                     comment: Some("test\ncomment line 2".to_string())
                 }
@@ -692,8 +751,34 @@ mod tests {
                 Posting {
                     account: "TEST:ABC 123".to_string(),
                     amount: None,
+                    balance: None,
                     status: Some(TransactionStatus::Pending),
                     comment: Some("test\ncomment line 2".to_string())
+                }
+            ))
+        );
+        assert_eq!(
+            parse_posting(CompleteStr(" TEST:ABC 123  $1.20 = $2.40 ;comment")),
+            Ok((
+                CompleteStr(""),
+                Posting {
+                    account: "TEST:ABC 123".to_string(),
+                    amount: Some(Amount {
+                        quantity: Decimal::new(120, 2),
+                        commodity: Commodity {
+                            name: "$".to_string(),
+                            position: CommodityPosition::Left
+                        }
+                    }),
+                    balance: Some(Balance::Amount(Amount {
+                        quantity: Decimal::new(240, 2),
+                        commodity: Commodity {
+                            name: "$".to_string(),
+                            position: CommodityPosition::Left
+                        }
+                    })),
+                    status: None,
+                    comment: Some("comment".to_string())
                 }
             ))
         );
@@ -704,6 +789,7 @@ mod tests {
                 Posting {
                     account: "TEST:ABC 123".to_string(),
                     amount: None,
+                    balance: None,
                     status: None,
                     comment: None
                 }
@@ -738,6 +824,7 @@ mod tests {
                                     position: CommodityPosition::Left
                                 }
                             }),
+                            balance: None,
                             status: None,
                             comment: Some("test".to_string()),
                         },
@@ -750,6 +837,7 @@ mod tests {
                                     position: CommodityPosition::Left
                                 }
                             }),
+                            balance: None,
                             status: None,
                             comment: None,
                         }
@@ -784,10 +872,12 @@ mod tests {
                                     position: CommodityPosition::Left
                                 }
                             }),
+                            balance: None,
                             status: None,
                             comment: Some("test".to_string()),
                         },
                         Posting {
+                            balance: None,
                             account: "TEST:DEF 123".to_string(),
                             amount: Some(Amount {
                                 quantity: Decimal::new(-120, 2),
@@ -802,6 +892,7 @@ mod tests {
                         Posting {
                             account: "TEST:GHI 123".to_string(),
                             amount: None,
+                            balance: None,
                             status: None,
                             comment: None,
                         },
@@ -814,6 +905,7 @@ mod tests {
                                     position: CommodityPosition::Left
                                 }
                             }),
+                            balance: None,
                             status: None,
                             comment: None,
                         },
