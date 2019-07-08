@@ -4,10 +4,10 @@ use nom::*;
 use rust_decimal::Decimal;
 use std::str::FromStr;
 
-use model::*;
-use model_internal::*;
+use super::model::*;
+use common::*;
 
-pub enum CustomError {
+enum CustomError {
     NonExistingDate,
     MoreThanOnePostingWithoutAmount,
     NoPostingWithAnAmount,
@@ -95,7 +95,7 @@ named!(parse_datetime_internal<CompleteStr, (i32, i32, i32, i32, i32, i32)>,
     )
 );
 
-pub fn parse_date(text: CompleteStr) -> IResult<CompleteStr, NaiveDate> {
+fn parse_date(text: CompleteStr) -> IResult<CompleteStr, NaiveDate> {
     let res = parse_date_internal(text)?;
 
     let rest = res.0;
@@ -112,7 +112,7 @@ pub fn parse_date(text: CompleteStr) -> IResult<CompleteStr, NaiveDate> {
     }
 }
 
-pub fn parse_datetime(text: CompleteStr) -> IResult<CompleteStr, NaiveDateTime> {
+fn parse_datetime(text: CompleteStr) -> IResult<CompleteStr, NaiveDateTime> {
     let res = parse_datetime_internal(text)?;
 
     let rest = res.0;
@@ -231,13 +231,12 @@ named!(parse_commodity_price<CompleteStr, CommodityPrice>,
         amount: parse_amount >>
         opt!(white_spaces) >>
         opt!(parse_inline_comment) >>
-        eol_or_eof >>
         (CommodityPrice { datetime: datetime, commodity_name: name.to_string(), amount: amount })
     )
 );
 
 named!(parse_empty_line<CompleteStr, CompleteStr>,
-    alt!(eol | recognize!(pair!(white_spaces, eol_or_eof)))
+    recognize!(pair!(opt!(white_spaces), peek!(eol_or_eof)))
 );
 
 named!(parse_line_comment<CompleteStr, &str>,
@@ -246,7 +245,6 @@ named!(parse_line_comment<CompleteStr, &str>,
         alt!(tag!(";") | tag!("#") | tag!("%") | tag!("|") | tag!("*")) >>
         opt!(white_spaces) >>
         comment: take_while!(is_not_eol_char) >>
-        eol_or_eof >>
         (comment.0)
     )
 );
@@ -260,7 +258,7 @@ named!(parse_inline_comment<CompleteStr, &str>,
     )
 );
 
-pub fn parse_account(text: CompleteStr) -> IResult<CompleteStr, &str> {
+fn parse_account(text: CompleteStr) -> IResult<CompleteStr, &str> {
     let mut second_space = false;
     for ind in text.iter_indices() {
         let (pos, c) = ind;
@@ -324,8 +322,9 @@ named!(parse_posting<CompleteStr, Posting>,
         )) >>
         opt!(white_spaces) >>
         inline_comment: opt!(parse_inline_comment) >>
-        eol_or_eof >>
-        line_comments: many0!(parse_line_comment) >>
+        line_comments: many0!(
+            preceded!(opt!(eol_or_eof), parse_line_comment)
+        ) >>
         (Posting {
             account: account.to_string(),
             amount: amount,
@@ -342,7 +341,7 @@ fn validate_transaction(
 ) -> IResult<CompleteStr, Transaction> {
     let mut seen_empty_posting = false;
     for posting in &transaction.postings {
-        if posting.amount.is_none() {
+        if posting.amount.is_none() && posting.balance.is_none() {
             if seen_empty_posting {
                 return Err(Err::Error(error_position!(
                     input,
@@ -379,9 +378,12 @@ named!(parse_transaction<CompleteStr, Transaction>,
         description: map!(take_while!(is_not_eol_or_comment_char),
             |s: CompleteStr| { s.0.trim_end().to_string() }) >>
         inline_comment: opt!(parse_inline_comment) >>
-        eol_or_eof >>
-        line_comments: many0!(parse_line_comment) >>
-        postings: many1!(parse_posting) >>
+        line_comments: many0!(
+            preceded!(opt!(eol_or_eof), parse_line_comment)
+        ) >>
+        postings: many1!(
+            preceded!(opt!(eol_or_eof), parse_posting)
+        ) >>
         transaction: apply!(validate_transaction,
             Transaction {
                 comment: join_comments(inline_comment, line_comments),
@@ -397,13 +399,20 @@ named!(parse_transaction<CompleteStr, Transaction>,
     )
 );
 
-named!(pub parse_ledger_items<CompleteStr, Vec<LedgerItem>>,
-    many0!(alt!(
-        map!(parse_empty_line, |_| { LedgerItem::EmptyLine }) |
-        map!(parse_line_comment, |comment: &str| { LedgerItem::LineComment(comment.to_string()) }) |
-        map!(parse_transaction, |transaction: Transaction| { LedgerItem::Transaction(transaction) }) |
-        map!(parse_commodity_price, |cm: CommodityPrice| { LedgerItem::CommodityPrice(cm) })
-    ))
+named!(parse_ledger_item<CompleteStr, LedgerItem>,
+    alt!(
+        map!(terminated!(parse_empty_line, eol_or_eof), |_| { LedgerItem::EmptyLine }) |
+        map!(terminated!(parse_line_comment, eol_or_eof), |comment: &str| { LedgerItem::LineComment(comment.to_string()) }) |
+        map!(terminated!(parse_transaction, eol_or_eof), |transaction: Transaction| { LedgerItem::Transaction(transaction) }) |
+        map!(terminated!(parse_commodity_price, eol_or_eof), |cm: CommodityPrice| { LedgerItem::CommodityPrice(cm) })
+    )
+);
+
+named!(pub parse_ledger<CompleteStr, Ledger>,
+    do_parse!(
+        items: many0!(parse_ledger_item) >>
+        (Ledger { items: items })
+    )
 );
 
 #[cfg(test)]
@@ -645,7 +654,7 @@ mod tests {
     #[test]
     fn parse_commodity_price_test() {
         assert_eq!(
-            parse_commodity_price(CompleteStr("P 2017-11-12 12:00:00 mBH 5.00 PLN\r\n")),
+            parse_commodity_price(CompleteStr("P 2017-11-12 12:00:00 mBH 5.00 PLN")),
             Ok((
                 CompleteStr(""),
                 CommodityPrice {
@@ -694,7 +703,7 @@ mod tests {
     #[test]
     fn parse_posting_test() {
         assert_eq!(
-            parse_posting(CompleteStr(" TEST:ABC 123  $1.20\n")),
+            parse_posting(CompleteStr(" TEST:ABC 123  $1.20")),
             Ok((
                 CompleteStr(""),
                 Posting {
@@ -939,8 +948,8 @@ mod tests {
     }
 
     #[test]
-    fn parse_ledger_items_test() {
-        let res = parse_ledger_items(CompleteStr(
+    fn parse_ledger_test() {
+        let res = parse_ledger(CompleteStr(
             r#"; Example 1
 
 P 2017-11-12 12:00:00 mBH 5.00 PLN
@@ -957,36 +966,36 @@ P 2017-11-12 12:00:00 mBH 5.00 PLN
         ))
         .unwrap()
         .1;
-        assert_eq!(res.len(), 8);
-        assert!(match res[0] {
+        assert_eq!(res.items.len(), 8);
+        assert!(match res.items[0] {
             LedgerItem::LineComment(_) => true,
             _ => false,
         });
-        assert!(match res[1] {
+        assert!(match res.items[1] {
             LedgerItem::EmptyLine => true,
             _ => false,
         });
-        assert!(match res[2] {
+        assert!(match res.items[2] {
             LedgerItem::CommodityPrice(_) => true,
             _ => false,
         });
-        assert!(match res[3] {
+        assert!(match res.items[3] {
             LedgerItem::EmptyLine => true,
             _ => false,
         });
-        assert!(match res[4] {
+        assert!(match res.items[4] {
             LedgerItem::LineComment(_) => true,
             _ => false,
         });
-        assert!(match res[5] {
+        assert!(match res.items[5] {
             LedgerItem::Transaction(_) => true,
             _ => false,
         });
-        assert!(match res[6] {
+        assert!(match res.items[6] {
             LedgerItem::EmptyLine => true,
             _ => false,
         });
-        assert!(match res[7] {
+        assert!(match res.items[7] {
             LedgerItem::Transaction(_) => true,
             _ => false,
         });
