@@ -4,23 +4,21 @@ use nom::*;
 use rust_decimal::Decimal;
 use std::str::FromStr;
 
-use model::*;
-use model_internal::*;
+use super::model::*;
+use super::model_internal::*;
 
-pub enum CustomError {
+enum CustomError {
     NonExistingDate,
+    MoreThanOnePostingWithoutAmount,
+    NoPostingWithAnAmount,
 }
 
 fn is_digit(c: char) -> bool {
     (c >= '0' && c <= '9')
 }
 
-fn is_commodity_first_char(c: char) -> bool {
-    (c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '$' || c > 0x7F as char)
-}
-
 fn is_commodity_char(c: char) -> bool {
-    (c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '$' || c > 0x7F as char)
+    !(('0' <= c && c <= '9') || c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '-')
 }
 
 fn is_white_char(c: char) -> bool {
@@ -97,7 +95,7 @@ named!(parse_datetime_internal<CompleteStr, (i32, i32, i32, i32, i32, i32)>,
     )
 );
 
-pub fn parse_date(text: CompleteStr) -> IResult<CompleteStr, NaiveDate> {
+fn parse_date(text: CompleteStr) -> IResult<CompleteStr, NaiveDate> {
     let res = parse_date_internal(text)?;
 
     let rest = res.0;
@@ -114,7 +112,7 @@ pub fn parse_date(text: CompleteStr) -> IResult<CompleteStr, NaiveDate> {
     }
 }
 
-pub fn parse_datetime(text: CompleteStr) -> IResult<CompleteStr, NaiveDateTime> {
+fn parse_datetime(text: CompleteStr) -> IResult<CompleteStr, NaiveDateTime> {
     let res = parse_datetime_internal(text)?;
 
     let rest = res.0;
@@ -137,14 +135,22 @@ pub fn parse_datetime(text: CompleteStr) -> IResult<CompleteStr, NaiveDateTime> 
 
 named!(parse_quantity<CompleteStr, Decimal>,
     map_res!(
-        recognize!(
-            tuple!(
-                opt!(tag!("-")),
-                digit,
-                opt!(tuple!(tag!("."), digit))
-            )
+        do_parse!(
+                sign: opt!(tag!("-")) >>
+                decimal: do_parse!(
+                    leading: take_while_m_n!(1, 3, is_digit) >>
+                    rest: alt!(
+                        map!(
+                            many1!(
+                                preceded!(tag!(","),
+                                    map!(take_while_m_n!(3, 3, is_digit), |group| group.to_string()))), |groups| groups.join("")) |
+                        map!(digit0, |d| d.to_string())) >>
+                    (format!("{}{}", leading, rest))
+                ) >>
+                fractional: opt!(recognize!(preceded!(tag!("."), digit))) >>
+                (format!("{}{}{}", sign.unwrap_or_else(|| CompleteStr("")), decimal, fractional.unwrap_or_else(|| CompleteStr(""))))
         ),
-        |s: CompleteStr| { Decimal::from_str(s.0) }
+        |s: String| Decimal::from_str(&s)
     )
 );
 
@@ -157,12 +163,7 @@ named!(string_between_quotes<CompleteStr, &str>,
 
 named!(commodity_without_quotes<CompleteStr, &str>,
     map!(
-        recognize!(
-            tuple!(
-                take_while_m_n!(1, 1, is_commodity_first_char),
-                take_while!(is_commodity_char)
-            )
-        ),
+        take_while1!(is_commodity_char),
         |s: CompleteStr| { s.0 }
     )
 );
@@ -230,13 +231,12 @@ named!(parse_commodity_price<CompleteStr, CommodityPrice>,
         amount: parse_amount >>
         opt!(white_spaces) >>
         opt!(parse_inline_comment) >>
-        eol_or_eof >>
         (CommodityPrice { datetime: datetime, commodity_name: name.to_string(), amount: amount })
     )
 );
 
 named!(parse_empty_line<CompleteStr, CompleteStr>,
-    alt!(eol | recognize!(pair!(white_spaces, eol_or_eof)))
+    recognize!(pair!(opt!(white_spaces), peek!(eol_or_eof)))
 );
 
 named!(parse_line_comment<CompleteStr, &str>,
@@ -245,7 +245,6 @@ named!(parse_line_comment<CompleteStr, &str>,
         alt!(tag!(";") | tag!("#") | tag!("%") | tag!("|") | tag!("*")) >>
         opt!(white_spaces) >>
         comment: take_while!(is_not_eol_char) >>
-        eol_or_eof >>
         (comment.0)
     )
 );
@@ -259,15 +258,15 @@ named!(parse_inline_comment<CompleteStr, &str>,
     )
 );
 
-pub fn parse_account(text: CompleteStr) -> IResult<CompleteStr, &str> {
+fn parse_account(text: CompleteStr) -> IResult<CompleteStr, &str> {
     let mut second_space = false;
     for ind in text.iter_indices() {
         let (pos, c) = ind;
 
-        if c == '\t' || c == '\r' || c == '\n' {
+        if c == '\t' || c == '\r' || c == '\n' || c == ';' {
             if pos > 0 {
                 let (rest, found) = text.take_split(pos);
-                return Ok((rest, found.0));
+                return Ok((rest, found.0.trim_end()));
             } else {
                 return Err(Err::Incomplete(Needed::Size(1)));
             }
@@ -305,9 +304,16 @@ named!(parse_posting<CompleteStr, Posting>,
         status: opt!(parse_transaction_status) >>
         opt!(white_spaces) >>
         account: parse_account >>
-        white_spaces >>
-        amount: parse_amount >>
-        opt!(white_spaces) >>
+        amount: alt!(
+            do_parse!(
+                white_spaces >>
+                amount: parse_amount >>
+                opt!(white_spaces) >>
+                (Some(amount))) |
+            do_parse!(
+                opt!(white_spaces) >>
+                (None))
+        ) >>
         balance:  opt!(do_parse!(
             tag!("=") >>
             opt!(white_spaces) >>
@@ -316,8 +322,9 @@ named!(parse_posting<CompleteStr, Posting>,
         )) >>
         opt!(white_spaces) >>
         inline_comment: opt!(parse_inline_comment) >>
-        eol_or_eof >>
-        line_comments: many0!(parse_line_comment) >>
+        line_comments: many0!(
+            preceded!(opt!(eol_or_eof), parse_line_comment)
+        ) >>
         (Posting {
             account: account.to_string(),
             amount: amount,
@@ -327,6 +334,32 @@ named!(parse_posting<CompleteStr, Posting>,
         })
     ))
 );
+
+fn validate_transaction(
+    input: CompleteStr,
+    transaction: Transaction,
+) -> IResult<CompleteStr, Transaction> {
+    let mut seen_empty_posting = false;
+    for posting in &transaction.postings {
+        if posting.amount.is_none() && posting.balance.is_none() {
+            if seen_empty_posting {
+                return Err(Err::Error(error_position!(
+                    input,
+                    ErrorKind::Custom(CustomError::MoreThanOnePostingWithoutAmount as u32)
+                )));
+            } else {
+                seen_empty_posting = true;
+            }
+        }
+    }
+    if seen_empty_posting && transaction.postings.len() == 1 {
+        return Err(Err::Error(error_position!(
+            input,
+            ErrorKind::Custom(CustomError::NoPostingWithAnAmount as u32)
+        )));
+    }
+    Ok((input, transaction))
+}
 
 named!(parse_transaction<CompleteStr, Transaction>,
     do_parse!(
@@ -345,28 +378,41 @@ named!(parse_transaction<CompleteStr, Transaction>,
         description: map!(take_while!(is_not_eol_or_comment_char),
             |s: CompleteStr| { s.0.trim_end().to_string() }) >>
         inline_comment: opt!(parse_inline_comment) >>
-        eol_or_eof >>
-        line_comments: many0!(parse_line_comment) >>
-        postings: many1!(parse_posting) >>
-        (Transaction {
-            comment: join_comments(inline_comment, line_comments),
-            date: date,
-            effective_date: effective_date,
-            status: status,
-            code: code,
-            description: description,
-            postings: postings
-        })
+        line_comments: many0!(
+            preceded!(opt!(eol_or_eof), parse_line_comment)
+        ) >>
+        postings: many1!(
+            preceded!(opt!(eol_or_eof), parse_posting)
+        ) >>
+        transaction: apply!(validate_transaction,
+            Transaction {
+                comment: join_comments(inline_comment, line_comments),
+                date,
+                effective_date,
+                status,
+                code,
+                description,
+                postings
+            }
+        ) >>
+        (transaction)
     )
 );
 
-named!(pub parse_ledger_items<CompleteStr, Vec<LedgerItem>>,
-    many0!(alt!(
-        map!(parse_empty_line, |_| { LedgerItem::EmptyLine }) |
-        map!(parse_line_comment, |comment: &str| { LedgerItem::LineComment(comment.to_string()) }) |
-        map!(parse_transaction, |transaction: Transaction| { LedgerItem::Transaction(transaction) }) |
-        map!(parse_commodity_price, |cm: CommodityPrice| { LedgerItem::CommodityPrice(cm) })
-    ))
+named!(parse_ledger_item<CompleteStr, LedgerItem>,
+    alt!(
+        map!(terminated!(parse_empty_line, eol_or_eof), |_| { LedgerItem::EmptyLine }) |
+        map!(terminated!(parse_line_comment, eol_or_eof), |comment: &str| { LedgerItem::LineComment(comment.to_string()) }) |
+        map!(terminated!(parse_transaction, eol_or_eof), |transaction: Transaction| { LedgerItem::Transaction(transaction) }) |
+        map!(terminated!(parse_commodity_price, eol_or_eof), |cm: CommodityPrice| { LedgerItem::CommodityPrice(cm) })
+    )
+);
+
+named!(pub parse_ledger<CompleteStr, LedgerInternal>,
+    do_parse!(
+        items: many0!(parse_ledger_item) >>
+        (LedgerInternal { items: items })
+    )
 );
 
 #[cfg(test)]
@@ -428,6 +474,10 @@ mod tests {
     #[test]
     fn parse_quantity_test() {
         assert_eq!(
+            parse_quantity(CompleteStr("1000")),
+            Ok((CompleteStr(""), Decimal::new(1000, 0)))
+        );
+        assert_eq!(
             parse_quantity(CompleteStr("2.02")),
             Ok((CompleteStr(""), Decimal::new(202, 2)))
         );
@@ -442,6 +492,18 @@ mod tests {
         assert_eq!(
             parse_quantity(CompleteStr("3")),
             Ok((CompleteStr(""), Decimal::new(3, 0)))
+        );
+        assert_eq!(
+            parse_quantity(CompleteStr("1")),
+            Ok((CompleteStr(""), Decimal::new(1, 0)))
+        );
+        assert_eq!(
+            parse_quantity(CompleteStr("1,000")),
+            Ok((CompleteStr(""), Decimal::new(1000, 0)))
+        );
+        assert_eq!(
+            parse_quantity(CompleteStr("12,456,132.14")),
+            Ok((CompleteStr(""), Decimal::new(1245613214, 2)))
         );
     }
 
@@ -458,6 +520,18 @@ mod tests {
         assert_eq!(
             parse_commodity(CompleteStr("$1")),
             Ok((CompleteStr("1"), "$"))
+        );
+        assert_eq!(
+            parse_commodity(CompleteStr("€1")),
+            Ok((CompleteStr("1"), "€"))
+        );
+        assert_eq!(
+            parse_commodity(CompleteStr("€ ")),
+            Ok((CompleteStr(" "), "€"))
+        );
+        assert_eq!(
+            parse_commodity(CompleteStr("€-1")),
+            Ok((CompleteStr("-1"), "€"))
         );
     }
 
@@ -580,7 +654,7 @@ mod tests {
     #[test]
     fn parse_commodity_price_test() {
         assert_eq!(
-            parse_commodity_price(CompleteStr("P 2017-11-12 12:00:00 mBH 5.00 PLN\r\n")),
+            parse_commodity_price(CompleteStr("P 2017-11-12 12:00:00 mBH 5.00 PLN")),
             Ok((
                 CompleteStr(""),
                 CommodityPrice {
@@ -629,18 +703,18 @@ mod tests {
     #[test]
     fn parse_posting_test() {
         assert_eq!(
-            parse_posting(CompleteStr(" TEST:ABC 123  $1.20\n")),
+            parse_posting(CompleteStr(" TEST:ABC 123  $1.20")),
             Ok((
                 CompleteStr(""),
                 Posting {
                     account: "TEST:ABC 123".to_string(),
-                    amount: Amount {
+                    amount: Some(Amount {
                         quantity: Decimal::new(120, 2),
                         commodity: Commodity {
                             name: "$".to_string(),
                             position: CommodityPosition::Left
                         }
-                    },
+                    }),
                     balance: None,
                     status: None,
                     comment: None,
@@ -653,13 +727,39 @@ mod tests {
                 CompleteStr(""),
                 Posting {
                     account: "TEST:ABC 123".to_string(),
-                    amount: Amount {
+                    amount: Some(Amount {
                         quantity: Decimal::new(120, 2),
                         commodity: Commodity {
                             name: "$".to_string(),
                             position: CommodityPosition::Left
                         }
-                    },
+                    }),
+                    balance: None,
+                    status: Some(TransactionStatus::Pending),
+                    comment: Some("test\ncomment line 2".to_string())
+                }
+            ))
+        );
+        assert_eq!(
+            parse_posting(CompleteStr(" ! TEST:ABC 123;test\n;comment line 2")),
+            Ok((
+                CompleteStr(""),
+                Posting {
+                    account: "TEST:ABC 123".to_string(),
+                    amount: None,
+                    balance: None,
+                    status: Some(TransactionStatus::Pending),
+                    comment: Some("test\ncomment line 2".to_string())
+                }
+            ))
+        );
+        assert_eq!(
+            parse_posting(CompleteStr(" ! TEST:ABC 123 ;test\n;comment line 2")),
+            Ok((
+                CompleteStr(""),
+                Posting {
+                    account: "TEST:ABC 123".to_string(),
+                    amount: None,
                     balance: None,
                     status: Some(TransactionStatus::Pending),
                     comment: Some("test\ncomment line 2".to_string())
@@ -672,13 +772,13 @@ mod tests {
                 CompleteStr(""),
                 Posting {
                     account: "TEST:ABC 123".to_string(),
-                    amount: Amount {
+                    amount: Some(Amount {
                         quantity: Decimal::new(120, 2),
                         commodity: Commodity {
                             name: "$".to_string(),
                             position: CommodityPosition::Left
                         }
-                    },
+                    }),
                     balance: Some(Balance::Amount(Amount {
                         quantity: Decimal::new(240, 2),
                         commodity: Commodity {
@@ -688,6 +788,19 @@ mod tests {
                     })),
                     status: None,
                     comment: Some("comment".to_string())
+                }
+            ))
+        );
+        assert_eq!(
+            parse_posting(CompleteStr(" TEST:ABC 123")),
+            Ok((
+                CompleteStr(""),
+                Posting {
+                    account: "TEST:ABC 123".to_string(),
+                    amount: None,
+                    balance: None,
+                    status: None,
+                    comment: None
                 }
             ))
         );
@@ -713,26 +826,26 @@ mod tests {
                     postings: vec![
                         Posting {
                             account: "TEST:ABC 123".to_string(),
-                            amount: Amount {
+                            amount: Some(Amount {
                                 quantity: Decimal::new(120, 2),
                                 commodity: Commodity {
                                     name: "$".to_string(),
                                     position: CommodityPosition::Left
                                 }
-                            },
+                            }),
                             balance: None,
                             status: None,
                             comment: Some("test".to_string()),
                         },
                         Posting {
                             account: "TEST:ABC 123".to_string(),
-                            amount: Amount {
+                            amount: Some(Amount {
                                 quantity: Decimal::new(120, 2),
                                 commodity: Commodity {
                                     name: "$".to_string(),
                                     position: CommodityPosition::Left
                                 }
-                            },
+                            }),
                             balance: None,
                             status: None,
                             comment: None,
@@ -741,11 +854,102 @@ mod tests {
                 }
             ))
         );
+        assert_eq!(
+            parse_transaction(CompleteStr(
+                r#"2018-10-01=2018-10-14 ! (123) Marek Ogarek
+ TEST:ABC 123  $1.20 ; test
+ TEST:DEF 123  EUR-1.20
+ TEST:GHI 123
+ TEST:JKL 123  EUR-2.00"#
+            )),
+            Ok((
+                CompleteStr(""),
+                Transaction {
+                    comment: None,
+                    date: NaiveDate::from_ymd(2018, 10, 01),
+                    effective_date: Some(NaiveDate::from_ymd(2018, 10, 14)),
+                    status: Some(TransactionStatus::Pending),
+                    code: Some("123".to_string()),
+                    description: "Marek Ogarek".to_string(),
+                    postings: vec![
+                        Posting {
+                            account: "TEST:ABC 123".to_string(),
+                            amount: Some(Amount {
+                                quantity: Decimal::new(120, 2),
+                                commodity: Commodity {
+                                    name: "$".to_string(),
+                                    position: CommodityPosition::Left
+                                }
+                            }),
+                            balance: None,
+                            status: None,
+                            comment: Some("test".to_string()),
+                        },
+                        Posting {
+                            balance: None,
+                            account: "TEST:DEF 123".to_string(),
+                            amount: Some(Amount {
+                                quantity: Decimal::new(-120, 2),
+                                commodity: Commodity {
+                                    name: "EUR".to_string(),
+                                    position: CommodityPosition::Left
+                                }
+                            }),
+                            status: None,
+                            comment: None,
+                        },
+                        Posting {
+                            account: "TEST:GHI 123".to_string(),
+                            amount: None,
+                            balance: None,
+                            status: None,
+                            comment: None,
+                        },
+                        Posting {
+                            account: "TEST:JKL 123".to_string(),
+                            amount: Some(Amount {
+                                quantity: Decimal::new(-200, 2),
+                                commodity: Commodity {
+                                    name: "EUR".to_string(),
+                                    position: CommodityPosition::Left
+                                }
+                            }),
+                            balance: None,
+                            status: None,
+                            comment: None,
+                        },
+                    ]
+                }
+            ))
+        );
+        assert_eq!(
+            parse_transaction(CompleteStr(
+                r#"2018-10-01=2018-10-14 ! (123) Marek Ogarek
+ TEST:ABC 123  $1.20 ; test
+ TEST:DEF 123
+ TEST:GHI 123
+ TEST:JKL 123  EUR-2.00"#
+            )),
+            Err(Error(Code(
+                CompleteStr(""),
+                ErrorKind::Custom(CustomError::MoreThanOnePostingWithoutAmount as u32)
+            )))
+        );
+        assert_eq!(
+            parse_transaction(CompleteStr(
+                r#"2018-10-01=2018-10-14 ! (123) Marek Ogarek
+ TEST:ABC 123   ; test"#
+            )),
+            Err(Error(Code(
+                CompleteStr(""),
+                ErrorKind::Custom(CustomError::NoPostingWithAnAmount as u32)
+            )))
+        );
     }
 
     #[test]
-    fn parse_ledger_items_test() {
-        let res = parse_ledger_items(CompleteStr(
+    fn parse_ledger_test() {
+        let res = parse_ledger(CompleteStr(
             r#"; Example 1
 
 P 2017-11-12 12:00:00 mBH 5.00 PLN
@@ -762,36 +966,36 @@ P 2017-11-12 12:00:00 mBH 5.00 PLN
         ))
         .unwrap()
         .1;
-        assert_eq!(res.len(), 8);
-        assert!(match res[0] {
+        assert_eq!(res.items.len(), 8);
+        assert!(match res.items[0] {
             LedgerItem::LineComment(_) => true,
             _ => false,
         });
-        assert!(match res[1] {
+        assert!(match res.items[1] {
             LedgerItem::EmptyLine => true,
             _ => false,
         });
-        assert!(match res[2] {
+        assert!(match res.items[2] {
             LedgerItem::CommodityPrice(_) => true,
             _ => false,
         });
-        assert!(match res[3] {
+        assert!(match res.items[3] {
             LedgerItem::EmptyLine => true,
             _ => false,
         });
-        assert!(match res[4] {
+        assert!(match res.items[4] {
             LedgerItem::LineComment(_) => true,
             _ => false,
         });
-        assert!(match res[5] {
+        assert!(match res.items[5] {
             LedgerItem::Transaction(_) => true,
             _ => false,
         });
-        assert!(match res[6] {
+        assert!(match res.items[6] {
             LedgerItem::EmptyLine => true,
             _ => false,
         });
-        assert!(match res[7] {
+        assert!(match res.items[7] {
             LedgerItem::Transaction(_) => true,
             _ => false,
         });

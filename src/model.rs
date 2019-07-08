@@ -7,19 +7,28 @@ use std::fmt;
 ///
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Ledger {
-    pub transactions: Vec<Transaction>,
     pub commodity_prices: Vec<CommodityPrice>,
+    pub transactions: Vec<Transaction>,
 }
 
 impl fmt::Display for Ledger {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for transaction in &self.transactions {
-            write!(f, "{}\n", transaction)?;
-        }
+        let mut first = true;
 
         for commodity_price in &self.commodity_prices {
-            write!(f, "{}", commodity_price)?;
+            first = false;
+            writeln!(f, "{}", commodity_price)?;
         }
+
+        for transaction in &self.transactions {
+            if !first {
+                writeln!(f)?;
+            }
+
+            first = false;
+            writeln!(f, "{}", transaction)?;
+        }
+
         Ok(())
     }
 }
@@ -64,10 +73,8 @@ impl fmt::Display for Transaction {
             }
         }
 
-        write!(f, "\n")?;
-
         for posting in &self.postings {
-            write!(f, "  {}\n", posting)?;
+            write!(f, "\n  {}", posting)?;
         }
 
         Ok(())
@@ -92,7 +99,7 @@ impl fmt::Display for TransactionStatus {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Posting {
     pub account: String,
-    pub amount: Amount,
+    pub amount: Option<Amount>,
     pub balance: Option<Balance>,
     pub status: Option<TransactionStatus>,
     pub comment: Option<String>,
@@ -104,7 +111,11 @@ impl fmt::Display for Posting {
             write!(f, "{} ", *status)?;
         }
 
-        write!(f, "{}  {}", self.account, self.amount)?;
+        write!(f, "{}", self.account)?;
+
+        if let Some(ref amount) = self.amount {
+            write!(f, "  {}", amount)?;
+        }
 
         if let Some(ref balance) = self.balance {
             write!(f, " = {}", *balance)?;
@@ -231,6 +242,26 @@ mod tests {
     }
 
     #[test]
+    fn display_commodity_price() {
+        let actual = format!(
+            "{}",
+            CommodityPrice {
+                datetime: NaiveDate::from_ymd(2017, 11, 12).and_hms(12, 00, 00),
+                commodity_name: "mBH".to_string(),
+                amount: Amount {
+                    quantity: Decimal::new(500, 2),
+                    commodity: Commodity {
+                        name: "PLN".to_string(),
+                        position: CommodityPosition::Right
+                    }
+                }
+            }
+        );
+        let expected = "P 2017-11-12 12:00:00 mBH 5.00 PLN";
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
     fn display_balance() {
         assert_eq!(
             format!(
@@ -255,13 +286,13 @@ mod tests {
                 "{}",
                 Posting {
                     account: "Assets:Checking".to_string(),
-                    amount: Amount {
+                    amount: Some(Amount {
                         quantity: Decimal::new(4200, 2),
                         commodity: Commodity {
                             name: "USD".to_string(),
                             position: CommodityPosition::Left,
                         }
-                    },
+                    }),
                     balance: Some(Balance::Amount(Amount {
                         quantity: Decimal::new(5000, 2),
                         commodity: Commodity {
@@ -291,26 +322,26 @@ mod tests {
                 postings: vec![
                     Posting {
                         account: "TEST:ABC 123".to_string(),
-                        amount: Amount {
+                        amount: Some(Amount {
                             quantity: Decimal::new(120, 2),
                             commodity: Commodity {
                                 name: "$".to_string(),
                                 position: CommodityPosition::Left
                             }
-                        },
+                        }),
                         balance: None,
                         status: None,
                         comment: Some("dd".to_string())
                     },
                     Posting {
                         account: "TEST:ABC 123".to_string(),
-                        amount: Amount {
+                        amount: Some(Amount {
                             quantity: Decimal::new(120, 2),
                             commodity: Commodity {
                                 name: "$".to_string(),
                                 position: CommodityPosition::Left
                             }
-                        },
+                        }),
                         balance: None,
                         status: None,
                         comment: None
@@ -323,28 +354,7 @@ mod tests {
   ; Comment Line 2
   TEST:ABC 123  $1.20
   ; dd
-  TEST:ABC 123  $1.20
-"#;
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn display_commodity_price() {
-        let actual = format!(
-            "{}",
-            CommodityPrice {
-                datetime: NaiveDate::from_ymd(2017, 11, 12).and_hms(12, 00, 00),
-                commodity_name: "mBH".to_string(),
-                amount: Amount {
-                    quantity: Decimal::new(500, 2),
-                    commodity: Commodity {
-                        name: "PLN".to_string(),
-                        position: CommodityPosition::Right
-                    }
-                }
-            }
-        );
-        let expected = "P 2017-11-12 12:00:00 mBH 5.00 PLN";
+  TEST:ABC 123  $1.20"#;
         assert_eq!(actual, expected);
     }
 
@@ -364,26 +374,26 @@ mod tests {
                         postings: vec![
                             Posting {
                                 account: "TEST:ABC 123".to_string(),
-                                amount: Amount {
+                                amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
                                         name: "$".to_string(),
                                         position: CommodityPosition::Left
                                     }
-                                },
+                                }),
                                 balance: None,
                                 status: None,
                                 comment: Some("dd".to_string())
                             },
                             Posting {
                                 account: "TEST:ABC 123".to_string(),
-                                amount: Amount {
+                                amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
                                         name: "$".to_string(),
                                         position: CommodityPosition::Left
                                     }
-                                },
+                                }),
                                 balance: None,
                                 status: None,
                                 comment: None
@@ -400,26 +410,26 @@ mod tests {
                         postings: vec![
                             Posting {
                                 account: "TEST:ABC 123".to_string(),
-                                amount: Amount {
+                                amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
                                         name: "$".to_string(),
                                         position: CommodityPosition::Left
                                     }
-                                },
+                                }),
                                 balance: None,
                                 status: None,
                                 comment: None
                             },
                             Posting {
                                 account: "TEST:ABC 123".to_string(),
-                                amount: Amount {
+                                amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
                                         name: "$".to_string(),
                                         position: CommodityPosition::Left
                                     }
-                                },
+                                }),
                                 balance: None,
                                 status: None,
                                 comment: None
@@ -440,7 +450,9 @@ mod tests {
                 }]
             }
         );
-        let expected = r#"2018-10-01=2018-10-14 ! (123) Marek Ogarek
+        let expected = r#"P 2017-11-12 12:00:00 mBH 5.00 PLN
+
+2018-10-01=2018-10-14 ! (123) Marek Ogarek
   ; Comment Line 1
   ; Comment Line 2
   TEST:ABC 123  $1.20
@@ -450,8 +462,7 @@ mod tests {
 2018-10-01=2018-10-14 ! (123) Marek Ogarek
   TEST:ABC 123  $1.20
   TEST:ABC 123  $1.20
-
-P 2017-11-12 12:00:00 mBH 5.00 PLN"#;
+"#;
         assert_eq!(actual, expected);
     }
 }

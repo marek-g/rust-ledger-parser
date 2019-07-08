@@ -18,21 +18,21 @@ Supported elements:
 
 * Transaction headers with format:
 
-  ```
+  ```ledger-cli
   DATE[=EDATE] [*|!] [(CODE)] DESC
   ```
 
 * Transaction postings with format (minimum two spaces or one tab between ``ACCOUNT`` and ``AMOUNT``):
 
-  ```
-    ACCOUNT  AMOUNT [= BALANCE] [; NOTE]
+  ```ledger-cli
+    ACCOUNT  [AMOUNT] [= BALANCE] [; NOTE]
   ```
 
-  Note that the ``AMOUNT`` field is always required.
+  There may be only a single posting without an amount or balance in a transaction.
 
 * Commodity prices with format:
 
-  ```
+  ```ledger-cli
   P DATE SYMBOL PRICE
   ```
 
