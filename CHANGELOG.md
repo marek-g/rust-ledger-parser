@@ -9,6 +9,7 @@
 
 ### Changed
 
+- Updated rust_decimal crate.
 - Support for `,` as thousands separator (thanks to Emmanuel Surleau).
 - Support for commodities starting with a non-ASCII character (thanks to Emmanuel Surleau).
 - Fixed model::Posting not displaying its status (thanks to John Beisle).
