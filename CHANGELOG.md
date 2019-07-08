@@ -4,7 +4,6 @@
 
 ### Added
 
-- API for `simple::parse` which results in simpler AST (with precalulated balances and empty amounts).
 - Support for optional `amounts` (thanks to Emmanuel Surleau).
 - Support for `balance` assertion field in posting (thanks to John Beisle).
 

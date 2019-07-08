@@ -5,7 +5,7 @@ use rust_decimal::Decimal;
 use std::str::FromStr;
 
 use super::model::*;
-use common::*;
+use super::model_internal::*;
 
 enum CustomError {
     NonExistingDate,
@@ -408,10 +408,10 @@ named!(parse_ledger_item<CompleteStr, LedgerItem>,
     )
 );
 
-named!(pub parse_ledger<CompleteStr, Ledger>,
+named!(pub parse_ledger<CompleteStr, LedgerInternal>,
     do_parse!(
         items: many0!(parse_ledger_item) >>
-        (Ledger { items: items })
+        (LedgerInternal { items: items })
     )
 );
 

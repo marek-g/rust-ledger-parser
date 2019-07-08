@@ -18,13 +18,13 @@ Supported elements:
 
 * Transaction headers with format:
 
-  ```
+  ```ledger-cli
   DATE[=EDATE] [*|!] [(CODE)] DESC
   ```
 
 * Transaction postings with format (minimum two spaces or one tab between ``ACCOUNT`` and ``AMOUNT``):
 
-  ```
+  ```ledger-cli
     ACCOUNT  [AMOUNT] [= BALANCE] [; NOTE]
   ```
 
@@ -32,7 +32,7 @@ Supported elements:
 
 * Commodity prices with format:
 
-  ```
+  ```ledger-cli
   P DATE SYMBOL PRICE
   ```
 
@@ -41,31 +41,10 @@ Supported elements:
 ```rust
 extern crate ledger_parser;
 
-let result = ledger_parser::simple::parse(r#"; Example 1
+let result = ledger_parser::parse(r#"; Example 1
 2018-10-01=2018-10-14 ! (123) Description
   ; Transaction comment
   TEST:Account 123  $1.20
   ; Posting comment
   TEST:Account 345  -$1.20"#);
 ```
-
-## Two types of AST trees
-
-There are two types of AST trees you can get with this library:
-
-### ast::Ledger
-
-The `ast::Ledger` tree is parsed with `ast::parse()` method. It represents closely the original content keeping such information as:
-- information about empty amount fields
-- balance verification data
-- original order of entries (transactions and commodity prices)
-
-Additionally it does only a simple verification (datetime format, missing amount fields).
-
-This tree type is recommended to use with application types like format converters or data fetchers which wants to append new entries etc.
-
-### simple::Ledger
-
-The `simple::Ledger` tree is parsed with `simple::parse()` method. It calls additional transformation phase after the `ast::parse()`. During that phase the tree is simplified. The result doesn't contain such data as optional amount fields or balance verification data. These are replaced with the correct calculated amount (or an error is reported).
-
-This tree is easier to start working with for application types like report generators etc.
