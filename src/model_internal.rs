@@ -1,4 +1,4 @@
-use model::*;
+use crate::model::*;
 use std::convert::From;
 use std::fmt;
 

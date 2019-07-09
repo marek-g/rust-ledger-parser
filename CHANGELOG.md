@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Transitioned to Rust 2018 edition.
+
 ## [3.0.0] - 2019-07-08
 
 ### Added

@@ -28,15 +28,11 @@
 //!   P DATE SYMBOL PRICE
 //!   ```
 
-extern crate chrono;
-extern crate nom;
-extern crate rust_decimal;
-
 pub mod model;
 pub use model::*;
 
-mod parser;
 mod model_internal;
+mod parser;
 
 use std::fmt;
 

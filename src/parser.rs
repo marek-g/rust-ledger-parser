@@ -4,8 +4,8 @@ use nom::*;
 use rust_decimal::Decimal;
 use std::str::FromStr;
 
-use super::model::*;
-use super::model_internal::*;
+use crate::model::*;
+use crate::model_internal::*;
 
 enum CustomError {
     NonExistingDate,

@@ -1,7 +1,7 @@
 [package]
 name = "ledger-parser"
 version = "3.0.0"
-authors = ["Marek G <marek@nomail.com>"]
+authors = ["Marek Gibek <gibekm@gmail.com>"]
 description = "Rust library for parsing ledger cli (https://www.ledger-cli.org/) input files."
 license = "Unlicense"
 repository = "https://github.com/marek-g/rust-ledger-parser"
@@ -9,6 +9,7 @@ readme = "README.md"
 documentation = "https://docs.rs/ledger-parser"
 keywords = ["parser", "ledger", "ledger-cli"]
 categories = ["parsing"]
+edition = "2018"
 
 [dependencies]
 nom = "4"
