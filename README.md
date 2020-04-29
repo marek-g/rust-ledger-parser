@@ -38,11 +38,22 @@ Supported elements:
 
 ## Example
 
+Parsing:
+
 ```rust
-let result = ledger_parser::parse(r#"; Example 1
+let ledger = ledger_parser::parse(r#"; Example 1
 2018-10-01=2018-10-14 ! (123) Description
   ; Transaction comment
   TEST:Account 123  $1.20
   ; Posting comment
   TEST:Account 345  -$1.20"#);
+```
+
+Serializing:
+
+```rust
+use ledger_parser::{ Serializer, SerializerSettings };
+
+println!("{}", ledger);
+println!("{}, ledger.to_string_pretty(&SerializerSettings::with_indent("\t")));
 ```

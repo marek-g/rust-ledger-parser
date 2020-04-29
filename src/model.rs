@@ -1,6 +1,7 @@
 use chrono::{NaiveDate, NaiveDateTime};
 use rust_decimal::Decimal;
 use std::fmt;
+use crate::serializer::*;
 
 ///
 /// Main document. Contains transactions and/or commodity prices.
@@ -13,22 +14,7 @@ pub struct Ledger {
 
 impl fmt::Display for Ledger {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let mut first = true;
-
-        for commodity_price in &self.commodity_prices {
-            first = false;
-            writeln!(f, "{}", commodity_price)?;
-        }
-
-        for transaction in &self.transactions {
-            if !first {
-                writeln!(f)?;
-            }
-
-            first = false;
-            writeln!(f, "{}", transaction)?;
-        }
-
+        write!(f, "{}", self.to_string_pretty(&SerializerSettings::new()))?;
         Ok(())
     }
 }
@@ -49,34 +35,7 @@ pub struct Transaction {
 
 impl fmt::Display for Transaction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.date)?;
-
-        if let Some(effective_date) = self.effective_date {
-            write!(f, "={}", effective_date)?;
-        }
-
-        if let Some(ref status) = self.status {
-            write!(f, " {}", status)?;
-        }
-
-        if let Some(ref code) = self.code {
-            write!(f, " ({})", code)?;
-        }
-
-        if !self.description.is_empty() {
-            write!(f, " {}", self.description)?;
-        }
-
-        if let Some(ref comment) = self.comment {
-            for comment in comment.split("\n") {
-                write!(f, "\n  ; {}", comment)?;
-            }
-        }
-
-        for posting in &self.postings {
-            write!(f, "\n  {}", posting)?;
-        }
-
+        write!(f, "{}", self.to_string_pretty(&SerializerSettings::new()))?;
         Ok(())
     }
 }
@@ -89,10 +48,8 @@ pub enum TransactionStatus {
 
 impl fmt::Display for TransactionStatus {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            TransactionStatus::Pending => write!(f, "!"),
-            TransactionStatus::Cleared => write!(f, "*"),
-        }
+        write!(f, "{}", self.to_string_pretty(&SerializerSettings::new()))?;
+        Ok(())
     }
 }
 
@@ -107,26 +64,7 @@ pub struct Posting {
 
 impl fmt::Display for Posting {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if let Some(ref status) = self.status {
-            write!(f, "{} ", *status)?;
-        }
-
-        write!(f, "{}", self.account)?;
-
-        if let Some(ref amount) = self.amount {
-            write!(f, "  {}", amount)?;
-        }
-
-        if let Some(ref balance) = self.balance {
-            write!(f, " = {}", *balance)?;
-        }
-
-        if let Some(ref comment) = self.comment {
-            for comment in comment.split("\n") {
-                write!(f, "\n  ; {}", comment)?;
-            }
-        }
-
+        write!(f, "{}", self.to_string_pretty(&SerializerSettings::new()))?;
         Ok(())
     }
 }
@@ -139,10 +77,8 @@ pub struct Amount {
 
 impl fmt::Display for Amount {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.commodity.position {
-            CommodityPosition::Left => write!(f, "{}{}", self.commodity.name, self.quantity),
-            CommodityPosition::Right => write!(f, "{} {}", self.quantity, self.commodity.name),
-        }
+        write!(f, "{}", self.to_string_pretty(&SerializerSettings::new()))?;
+        Ok(())
     }
 }
 
@@ -172,10 +108,8 @@ pub enum Balance {
 
 impl fmt::Display for Balance {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Balance::Zero => write!(f, "0"),
-            Balance::Amount(ref balance) => write!(f, "{}", *balance),
-        }
+        write!(f, "{}", self.to_string_pretty(&SerializerSettings::new()))?;
+        Ok(())
     }
 }
 
@@ -191,11 +125,8 @@ pub struct CommodityPrice {
 
 impl fmt::Display for CommodityPrice {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "P {} {} {}",
-            self.datetime, self.commodity_name, self.amount
-        )
+        write!(f, "{}", self.to_string_pretty(&SerializerSettings::new()))?;
+        Ok(())
     }
 }
 

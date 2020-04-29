@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Serializer with configurable indent.
+
 ### Changed
 
 - Transitioned to Rust 2018 edition.

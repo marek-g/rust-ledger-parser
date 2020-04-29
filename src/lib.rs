@@ -28,8 +28,11 @@
 //!   P DATE SYMBOL PRICE
 //!   ```
 
-pub mod model;
+mod model;
 pub use model::*;
+
+mod serializer;
+pub use serializer::*;
 
 mod model_internal;
 mod parser;
