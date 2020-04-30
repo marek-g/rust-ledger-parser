@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+-
+
+## [3.1.0] - 2020-04-30
+
 ### Added
 
 - Serializer with configurable indent.
