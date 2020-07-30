@@ -8,7 +8,7 @@ repository = "https://github.com/marek-g/rust-ledger-parser"
 readme = "README.md"
 documentation = "https://docs.rs/ledger-parser"
 keywords = ["parser", "ledger", "ledger-cli"]
-categories = ["parsing"]
+categories = ["parser-implementations"]
 edition = "2018"
 
 [dependencies]
