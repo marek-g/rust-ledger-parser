@@ -122,7 +122,11 @@ impl Serializer for Posting {
             write!(writer, " ")?;
         }
 
-        write!(writer, "{}", self.account)?;
+        match self.reality {
+            Reality::Real => write!(writer, "{}", self.account)?,
+            Reality::BalancedVirtual => write!(writer, "[{}]", self.account)?,
+            Reality::UnbalancedVirtual => write!(writer, "({})", self.account)?,
+        }
 
         if let Some(ref amount) = self.amount {
             write!(writer, "{}", settings.indent)?;

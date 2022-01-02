@@ -270,15 +270,13 @@ named!(parse_include_file<CompleteStr, &str>,
     )
 );
 
-fn parse_account(text: CompleteStr) -> IResult<CompleteStr, &str> {
+fn parse_account(text: CompleteStr) -> IResult<CompleteStr, (&str, Reality)> {
     let mut second_space = false;
-    for ind in text.iter_indices() {
-        let (pos, c) = ind;
-
+    for (pos, c) in text.iter_indices() {
         if c == '\t' || c == '\r' || c == '\n' || c == ';' {
             if pos > 0 {
                 let (rest, found) = text.take_split(pos);
-                return Ok((rest, found.0.trim_end()));
+                return Ok((rest, parse_account_reality(found.0.trim_end())));
             } else {
                 return Err(Err::Incomplete(Needed::Size(1)));
             }
@@ -287,7 +285,7 @@ fn parse_account(text: CompleteStr) -> IResult<CompleteStr, &str> {
         if c == ' ' {
             if second_space {
                 let (rest, found) = text.take_split(pos - 1);
-                return Ok((rest, found.0));
+                return Ok((rest, parse_account_reality(found.0)));
             } else {
                 second_space = true;
             }
@@ -295,12 +293,28 @@ fn parse_account(text: CompleteStr) -> IResult<CompleteStr, &str> {
             second_space = false;
 
             if pos == text.len() - 1 && pos > 0 {
-                return Ok((CompleteStr(""), text.0));
+                return Ok((CompleteStr(""), parse_account_reality(text.0)));
             }
         }
     }
 
     Err(Err::Incomplete(Needed::Size(1)))
+}
+
+fn parse_account_reality(name: &str) -> (&str, Reality) {
+    if let Some(n1) = name.strip_prefix('[') {
+        if let Some(n2) = n1.strip_suffix(']') {
+            return (n2, Reality::BalancedVirtual);
+        }
+    }
+
+    if let Some(n1) = name.strip_prefix('(') {
+        if let Some(n2) = n1.strip_suffix(')') {
+            return (n2, Reality::UnbalancedVirtual);
+        }
+    }
+
+    (name, Reality::Real)
 }
 
 named!(parse_transaction_status<CompleteStr, TransactionStatus>,
@@ -338,7 +352,8 @@ named!(parse_posting<CompleteStr, Posting>,
             preceded!(opt!(eol_or_eof), parse_line_comment)
         ) >>
         (Posting {
-            account: account.to_string(),
+            account: account.0.to_string(),
+            reality: account.1,
             amount,
             balance,
             status,
@@ -689,15 +704,26 @@ mod tests {
     fn parse_account_test() {
         assert_eq!(
             parse_account(CompleteStr("TEST:ABC 123  ")),
-            Ok((CompleteStr("  "), "TEST:ABC 123"))
+            Ok((CompleteStr("  "), ("TEST:ABC 123", Reality::Real)))
         );
         assert_eq!(
             parse_account(CompleteStr("TEST:ABC 123\t")),
-            Ok((CompleteStr("\t"), "TEST:ABC 123"))
+            Ok((CompleteStr("\t"), ("TEST:ABC 123", Reality::Real)))
         );
         assert_eq!(
             parse_account(CompleteStr("TEST:ABC 123")),
-            Ok((CompleteStr(""), "TEST:ABC 123"))
+            Ok((CompleteStr(""), ("TEST:ABC 123", Reality::Real)))
+        );
+        assert_eq!(
+            parse_account(CompleteStr("[TEST:ABC 123]")),
+            Ok((CompleteStr(""), ("TEST:ABC 123", Reality::BalancedVirtual)))
+        );
+        assert_eq!(
+            parse_account(CompleteStr("(TEST:ABC 123)")),
+            Ok((
+                CompleteStr(""),
+                ("TEST:ABC 123", Reality::UnbalancedVirtual)
+            ))
         );
     }
 
@@ -721,6 +747,7 @@ mod tests {
                 CompleteStr(""),
                 Posting {
                     account: "TEST:ABC 123".to_string(),
+                    reality: Reality::Real,
                     amount: Some(Amount {
                         quantity: Decimal::new(120, 2),
                         commodity: Commodity {
@@ -740,6 +767,7 @@ mod tests {
                 CompleteStr(""),
                 Posting {
                     account: "TEST:ABC 123".to_string(),
+                    reality: Reality::Real,
                     amount: Some(Amount {
                         quantity: Decimal::new(120, 2),
                         commodity: Commodity {
@@ -759,6 +787,7 @@ mod tests {
                 CompleteStr(""),
                 Posting {
                     account: "TEST:ABC 123".to_string(),
+                    reality: Reality::Real,
                     amount: None,
                     balance: None,
                     status: Some(TransactionStatus::Pending),
@@ -772,6 +801,7 @@ mod tests {
                 CompleteStr(""),
                 Posting {
                     account: "TEST:ABC 123".to_string(),
+                    reality: Reality::Real,
                     amount: None,
                     balance: None,
                     status: Some(TransactionStatus::Pending),
@@ -785,6 +815,7 @@ mod tests {
                 CompleteStr(""),
                 Posting {
                     account: "TEST:ABC 123".to_string(),
+                    reality: Reality::Real,
                     amount: Some(Amount {
                         quantity: Decimal::new(120, 2),
                         commodity: Commodity {
@@ -810,6 +841,7 @@ mod tests {
                 CompleteStr(""),
                 Posting {
                     account: "TEST:ABC 123".to_string(),
+                    reality: Reality::Real,
                     amount: None,
                     balance: None,
                     status: None,
@@ -839,6 +871,7 @@ mod tests {
                     postings: vec![
                         Posting {
                             account: "TEST:ABC 123".to_string(),
+                            reality: Reality::Real,
                             amount: Some(Amount {
                                 quantity: Decimal::new(120, 2),
                                 commodity: Commodity {
@@ -852,6 +885,7 @@ mod tests {
                         },
                         Posting {
                             account: "TEST:ABC 123".to_string(),
+                            reality: Reality::Real,
                             amount: Some(Amount {
                                 quantity: Decimal::new(120, 2),
                                 commodity: Commodity {
@@ -887,6 +921,7 @@ mod tests {
                     postings: vec![
                         Posting {
                             account: "TEST:ABC 123".to_string(),
+                            reality: Reality::Real,
                             amount: Some(Amount {
                                 quantity: Decimal::new(120, 2),
                                 commodity: Commodity {
@@ -901,6 +936,7 @@ mod tests {
                         Posting {
                             balance: None,
                             account: "TEST:DEF 123".to_string(),
+                            reality: Reality::Real,
                             amount: Some(Amount {
                                 quantity: Decimal::new(-120, 2),
                                 commodity: Commodity {
@@ -913,6 +949,7 @@ mod tests {
                         },
                         Posting {
                             account: "TEST:GHI 123".to_string(),
+                            reality: Reality::Real,
                             amount: None,
                             balance: None,
                             status: None,
@@ -920,6 +957,7 @@ mod tests {
                         },
                         Posting {
                             account: "TEST:JKL 123".to_string(),
+                            reality: Reality::Real,
                             amount: Some(Amount {
                                 quantity: Decimal::new(-200, 2),
                                 commodity: Commodity {

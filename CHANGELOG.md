@@ -5,6 +5,7 @@
 ### Added
 
 - Support for parsing (but ignoring) 'include' directives.
+- Support for virtual postings.
 
 ### Changed
 

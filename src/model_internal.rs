@@ -111,6 +111,7 @@ mod tests {
                         postings: vec![
                             Posting {
                                 account: "TEST:ABC 123".to_string(),
+                                reality: Reality::Real,
                                 amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
@@ -124,6 +125,7 @@ mod tests {
                             },
                             Posting {
                                 account: "TEST:ABC 123".to_string(),
+                                reality: Reality::Real,
                                 amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
@@ -148,6 +150,7 @@ mod tests {
                         postings: vec![
                             Posting {
                                 account: "TEST:ABC 123".to_string(),
+                                reality: Reality::Real,
                                 amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
@@ -161,6 +164,7 @@ mod tests {
                             },
                             Posting {
                                 account: "TEST:ABC 123".to_string(),
+                                reality: Reality::Real,
                                 amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
