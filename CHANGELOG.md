@@ -2,7 +2,9 @@
 
 ## [Unreleased]
 
--
+### Changed
+
+- Transitioned to Rust 2021 edition.
 
 ## [3.1.0] - 2020-04-30
 
