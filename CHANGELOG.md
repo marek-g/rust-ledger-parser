@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Support for parsing (but ignoring) 'include' directives.
+
 ### Changed
 
 - Transitioned to Rust 2021 edition.

@@ -260,6 +260,16 @@ named!(parse_inline_comment<CompleteStr, &str>,
     )
 );
 
+named!(parse_include_file<CompleteStr, &str>,
+    do_parse!(
+        opt!(white_spaces) >>
+        tag!("include") >>
+        white_spaces >>
+        filename: take_while!(is_not_eol_or_comment_char) >>
+        (filename.0)
+    )
+);
+
 fn parse_account(text: CompleteStr) -> IResult<CompleteStr, &str> {
     let mut second_space = false;
     for ind in text.iter_indices() {
@@ -406,7 +416,8 @@ named!(parse_ledger_item<CompleteStr, LedgerItem>,
         map!(terminated!(parse_empty_line, eol_or_eof), |_| { LedgerItem::EmptyLine }) |
         map!(terminated!(parse_line_comment, eol_or_eof), |comment: &str| { LedgerItem::LineComment(comment.to_string()) }) |
         map!(terminated!(parse_transaction, eol_or_eof), |transaction: Transaction| { LedgerItem::Transaction(transaction) }) |
-        map!(terminated!(parse_commodity_price, eol_or_eof), |cm: CommodityPrice| { LedgerItem::CommodityPrice(cm) })
+        map!(terminated!(parse_commodity_price, eol_or_eof), |cm: CommodityPrice| { LedgerItem::CommodityPrice(cm) }) |
+        map!(terminated!(parse_include_file, eol_or_eof), |file: &str| { LedgerItem::Include(file.to_string()) })
     )
 );
 
@@ -950,9 +961,19 @@ mod tests {
     }
 
     #[test]
+    fn parse_include_test() {
+        assert_eq!(
+            parse_include_file(CompleteStr(r#"include other_file.ledger"#)),
+            Ok((CompleteStr(""), "other_file.ledger"))
+        );
+    }
+
+    #[test]
     fn parse_ledger_test() {
         let res = parse_ledger(CompleteStr(
             r#"; Example 1
+
+include other_file.ledger
 
 P 2017-11-12 12:00:00 mBH 5.00 PLN
 
@@ -968,7 +989,7 @@ P 2017-11-12 12:00:00 mBH 5.00 PLN
         ))
         .unwrap()
         .1;
-        assert_eq!(res.items.len(), 8);
+        assert_eq!(res.items.len(), 10);
         assert!(match res.items[0] {
             LedgerItem::LineComment(_) => true,
             _ => false,
@@ -978,7 +999,7 @@ P 2017-11-12 12:00:00 mBH 5.00 PLN
             _ => false,
         });
         assert!(match res.items[2] {
-            LedgerItem::CommodityPrice(_) => true,
+            LedgerItem::Include(_) => true,
             _ => false,
         });
         assert!(match res.items[3] {
@@ -986,18 +1007,26 @@ P 2017-11-12 12:00:00 mBH 5.00 PLN
             _ => false,
         });
         assert!(match res.items[4] {
-            LedgerItem::LineComment(_) => true,
+            LedgerItem::CommodityPrice(_) => true,
             _ => false,
         });
         assert!(match res.items[5] {
-            LedgerItem::Transaction(_) => true,
-            _ => false,
-        });
-        assert!(match res.items[6] {
             LedgerItem::EmptyLine => true,
             _ => false,
         });
+        assert!(match res.items[6] {
+            LedgerItem::LineComment(_) => true,
+            _ => false,
+        });
         assert!(match res.items[7] {
+            LedgerItem::Transaction(_) => true,
+            _ => false,
+        });
+        assert!(match res.items[8] {
+            LedgerItem::EmptyLine => true,
+            _ => false,
+        });
+        assert!(match res.items[9] {
             LedgerItem::Transaction(_) => true,
             _ => false,
         });

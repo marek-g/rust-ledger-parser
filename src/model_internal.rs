@@ -25,6 +25,7 @@ pub enum LedgerItem {
     LineComment(String),
     Transaction(Transaction),
     CommodityPrice(CommodityPrice),
+    Include(String),
 }
 
 impl fmt::Display for LedgerItem {
@@ -34,6 +35,7 @@ impl fmt::Display for LedgerItem {
             LedgerItem::LineComment(comment) => writeln!(f, "; {}", comment)?,
             LedgerItem::Transaction(transaction) => writeln!(f, "{}", transaction)?,
             LedgerItem::CommodityPrice(commodity_price) => writeln!(f, "{}", commodity_price)?,
+            LedgerItem::Include(file) => writeln!(f, "include {}", file)?,
         }
         Ok(())
     }
@@ -76,6 +78,7 @@ impl From<LedgerInternal> for Ledger {
                     current_comment = None;
                     commodity_prices.push(commodity_price);
                 }
+                LedgerItem::Include(_file) => {}
             }
         }
 
