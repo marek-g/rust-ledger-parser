@@ -1,9 +1,10 @@
-use std::io;
 use crate::model::*;
+use std::io;
 
 pub trait Serializer {
     fn write<W>(&self, writer: &mut W, settings: &SerializerSettings) -> Result<(), io::Error>
-        where W: io::Write;
+    where
+        W: io::Write;
 
     fn to_string_pretty(&self, settings: &SerializerSettings) -> String {
         let mut res = Vec::new();
@@ -22,14 +23,22 @@ impl SerializerSettings {
 
     pub fn with_indent(indent: &str) -> Self {
         SerializerSettings {
-            indent: indent.to_string()
+            indent: indent.to_string(),
         }
+    }
+}
+
+impl Default for SerializerSettings {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 impl Serializer for Ledger {
     fn write<W>(&self, writer: &mut W, settings: &SerializerSettings) -> Result<(), io::Error>
-        where W: io::Write {
+    where
+        W: io::Write,
+    {
         let mut first = true;
 
         for commodity_price in &self.commodity_prices {
@@ -54,7 +63,9 @@ impl Serializer for Ledger {
 
 impl Serializer for Transaction {
     fn write<W>(&self, writer: &mut W, settings: &SerializerSettings) -> Result<(), io::Error>
-        where W: io::Write {
+    where
+        W: io::Write,
+    {
         write!(writer, "{}", self.date)?;
 
         if let Some(effective_date) = self.effective_date {
@@ -75,7 +86,7 @@ impl Serializer for Transaction {
         }
 
         if let Some(ref comment) = self.comment {
-            for comment in comment.split("\n") {
+            for comment in comment.split('\n') {
                 write!(writer, "\n{}; {}", settings.indent, comment)?;
             }
         }
@@ -91,7 +102,9 @@ impl Serializer for Transaction {
 
 impl Serializer for TransactionStatus {
     fn write<W>(&self, writer: &mut W, _settings: &SerializerSettings) -> Result<(), io::Error>
-        where W: io::Write {
+    where
+        W: io::Write,
+    {
         match self {
             TransactionStatus::Pending => write!(writer, "!"),
             TransactionStatus::Cleared => write!(writer, "*"),
@@ -101,7 +114,9 @@ impl Serializer for TransactionStatus {
 
 impl Serializer for Posting {
     fn write<W>(&self, writer: &mut W, settings: &SerializerSettings) -> Result<(), io::Error>
-        where W: io::Write {
+    where
+        W: io::Write,
+    {
         if let Some(ref status) = self.status {
             status.write(writer, settings)?;
             write!(writer, " ")?;
@@ -120,7 +135,7 @@ impl Serializer for Posting {
         }
 
         if let Some(ref comment) = self.comment {
-            for comment in comment.split("\n") {
+            for comment in comment.split('\n') {
                 write!(writer, "\n{}; {}", settings.indent, comment)?;
             }
         }
@@ -131,7 +146,9 @@ impl Serializer for Posting {
 
 impl Serializer for Amount {
     fn write<W>(&self, writer: &mut W, _settings: &SerializerSettings) -> Result<(), io::Error>
-        where W: io::Write {
+    where
+        W: io::Write,
+    {
         match self.commodity.position {
             CommodityPosition::Left => write!(writer, "{}{}", self.commodity.name, self.quantity),
             CommodityPosition::Right => write!(writer, "{} {}", self.quantity, self.commodity.name),
@@ -141,7 +158,9 @@ impl Serializer for Amount {
 
 impl Serializer for Balance {
     fn write<W>(&self, writer: &mut W, settings: &SerializerSettings) -> Result<(), io::Error>
-        where W: io::Write {
+    where
+        W: io::Write,
+    {
         match self {
             Balance::Zero => write!(writer, "0"),
             Balance::Amount(ref balance) => balance.write(writer, settings),
@@ -151,12 +170,10 @@ impl Serializer for Balance {
 
 impl Serializer for CommodityPrice {
     fn write<W>(&self, writer: &mut W, settings: &SerializerSettings) -> Result<(), io::Error>
-        where W: io::Write {
-        write!(
-            writer,
-            "P {} {} ",
-            self.datetime, self.commodity_name
-        )?;
+    where
+        W: io::Write,
+    {
+        write!(writer, "P {} {} ", self.datetime, self.commodity_name)?;
         self.amount.write(writer, settings)?;
         Ok(())
     }

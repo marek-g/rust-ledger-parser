@@ -55,7 +55,7 @@ impl fmt::Display for ParseError {
 impl std::error::Error for ParseError {
     fn description(&self) -> &str {
         match *self {
-            ParseError::String(ref err) => &err,
+            ParseError::String(ref err) => err,
         }
     }
 }

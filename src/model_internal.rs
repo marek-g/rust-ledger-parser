@@ -53,7 +53,7 @@ impl From<LedgerInternal> for Ledger {
                 }
                 LedgerItem::LineComment(comment) => {
                     if let Some(ref mut c) = current_comment {
-                        c.push_str("\n");
+                        c.push('\n');
                         c.push_str(&comment);
                     } else {
                         current_comment = Some(comment);
@@ -63,8 +63,8 @@ impl From<LedgerInternal> for Ledger {
                     if let Some(current_comment) = current_comment {
                         let mut full_comment = current_comment;
                         if let Some(ref transaction_comment) = transaction.comment {
-                            full_comment.push_str("\n");
-                            full_comment.push_str(&transaction_comment);
+                            full_comment.push('\n');
+                            full_comment.push_str(transaction_comment);
                         }
                         transaction.comment = Some(full_comment);
                     }
@@ -80,8 +80,8 @@ impl From<LedgerInternal> for Ledger {
         }
 
         Ledger {
-            transactions: transactions,
-            commodity_prices: commodity_prices,
+            transactions,
+            commodity_prices,
         }
     }
 }

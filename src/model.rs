@@ -1,7 +1,7 @@
+use crate::serializer::*;
 use chrono::{NaiveDate, NaiveDateTime};
 use rust_decimal::Decimal;
 use std::fmt;
-use crate::serializer::*;
 
 ///
 /// Main document. Contains transactions and/or commodity prices.

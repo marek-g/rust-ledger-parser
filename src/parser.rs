@@ -1,3 +1,7 @@
+// These lints show up in nom macros
+#![allow(clippy::double_comparisons)]
+#![allow(clippy::manual_range_contains)]
+
 use chrono::{NaiveDate, NaiveDateTime};
 use nom::types::CompleteStr;
 use nom::*;
@@ -14,41 +18,39 @@ enum CustomError {
 }
 
 fn is_digit(c: char) -> bool {
-    (c >= '0' && c <= '9')
+    ('0'..='9').contains(&c)
 }
 
 fn is_commodity_char(c: char) -> bool {
-    !(('0' <= c && c <= '9') || c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '-')
+    !(is_digit(c) || c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '-')
 }
 
 fn is_white_char(c: char) -> bool {
-    (c == ' ' || c == '\t')
+    c == ' ' || c == '\t'
 }
 
 fn is_not_eol_char(c: char) -> bool {
-    (c != '\r' && c != '\n')
+    c != '\r' && c != '\n'
 }
 
 fn is_not_eol_or_comment_char(c: char) -> bool {
-    (c != '\r' && c != '\n' && c != ';')
+    c != '\r' && c != '\n' && c != ';'
 }
 
 fn join_comments(inline_comment: Option<&str>, line_comments: Vec<&str>) -> Option<String> {
     if let Some(ref inline) = inline_comment {
-        if line_comments.len() == 0 {
+        if line_comments.is_empty() {
             inline_comment.map(|s| s.to_string())
         } else {
             let mut full = inline.to_string();
-            full.push_str("\n");
+            full.push('\n');
             full.push_str(&line_comments.join("\n"));
             Some(full)
         }
+    } else if line_comments.is_empty() {
+        None
     } else {
-        if line_comments.len() == 0 {
-            None
-        } else {
-            Some(line_comments.join("\n"))
-        }
+        Some(line_comments.join("\n"))
     }
 }
 
@@ -148,7 +150,7 @@ named!(parse_quantity<CompleteStr, Decimal>,
                     (format!("{}{}", leading, rest))
                 ) >>
                 fractional: opt!(recognize!(preceded!(tag!("."), digit))) >>
-                (format!("{}{}{}", sign.unwrap_or_else(|| CompleteStr("")), decimal, fractional.unwrap_or_else(|| CompleteStr(""))))
+                (format!("{}{}{}", sign.unwrap_or(CompleteStr("")), decimal, fractional.unwrap_or(CompleteStr(""))))
         ),
         |s: String| Decimal::from_str(&s)
     )
@@ -181,7 +183,7 @@ named!(parse_amount<CompleteStr, Amount>,
             opt!(white_spaces) >>
             quantity: parse_quantity >>
             (Amount {
-                quantity: if let Some(_) = neg_opt {
+                quantity: if neg_opt.is_some() {
                     quantity * Decimal::new(-1, 0)
                 } else { quantity },
                 commodity: Commodity {
@@ -196,7 +198,7 @@ named!(parse_amount<CompleteStr, Amount>,
             opt!(white_spaces) >>
             commodity: parse_commodity >>
             (Amount {
-                quantity: quantity,
+                quantity,
                 commodity: Commodity {
                     name: commodity.to_string(),
                     position: CommodityPosition::Right
@@ -231,7 +233,7 @@ named!(parse_commodity_price<CompleteStr, CommodityPrice>,
         amount: parse_amount >>
         opt!(white_spaces) >>
         opt!(parse_inline_comment) >>
-        (CommodityPrice { datetime: datetime, commodity_name: name.to_string(), amount: amount })
+        (CommodityPrice { datetime, commodity_name: name.to_string(), amount })
     )
 );
 
@@ -327,9 +329,9 @@ named!(parse_posting<CompleteStr, Posting>,
         ) >>
         (Posting {
             account: account.to_string(),
-            amount: amount,
-            balance: balance,
-            status: status,
+            amount,
+            balance,
+            status,
             comment: join_comments(inline_comment, line_comments),
         })
     ))
@@ -411,7 +413,7 @@ named!(parse_ledger_item<CompleteStr, LedgerItem>,
 named!(pub parse_ledger<CompleteStr, LedgerInternal>,
     do_parse!(
         items: many0!(parse_ledger_item) >>
-        (LedgerInternal { items: items })
+        (LedgerInternal { items })
     )
 );
 
