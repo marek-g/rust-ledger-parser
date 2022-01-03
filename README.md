@@ -12,17 +12,17 @@ Only a subset of the ledger-cli's file format is implemented.
 
 Supported elements:
 
-* Line comments (starting with: ``; # % | *``)
+- Line comments (starting with: `; # % | *`)
 
-* Inline comments (starting with ``;``)
+- Inline comments (starting with `;`)
 
-* Transaction headers with format:
+- Transaction headers with format:
 
   ```ledger-cli
   DATE[=EDATE] [*|!] [(CODE)] DESC
   ```
 
-* Transaction postings with format (minimum two spaces or one tab between ``ACCOUNT`` and ``AMOUNT``):
+- Transaction postings with format (minimum two spaces or one tab between `ACCOUNT` and `AMOUNT`):
 
   ```ledger-cli
     ACCOUNT  [AMOUNT] [= BALANCE] [; NOTE]
@@ -30,7 +30,7 @@ Supported elements:
 
   There may be only a single posting without an amount or balance in a transaction.
 
-* Commodity prices with format:
+- Commodity prices with format:
 
   ```ledger-cli
   P DATE SYMBOL PRICE
@@ -55,5 +55,5 @@ Serializing:
 use ledger_parser::{ Serializer, SerializerSettings };
 
 println!("{}", ledger);
-println!("{}, ledger.to_string_pretty(&SerializerSettings::with_indent("\t")));
+println!("{}", ledger.to_string_pretty(&SerializerSettings::with_indent("\t")));
 ```
