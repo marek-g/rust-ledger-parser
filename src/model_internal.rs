@@ -25,6 +25,7 @@ pub enum LedgerItem {
     LineComment(String),
     Transaction(Transaction),
     CommodityPrice(CommodityPrice),
+    Include(String),
 }
 
 impl fmt::Display for LedgerItem {
@@ -34,6 +35,7 @@ impl fmt::Display for LedgerItem {
             LedgerItem::LineComment(comment) => writeln!(f, "; {}", comment)?,
             LedgerItem::Transaction(transaction) => writeln!(f, "{}", transaction)?,
             LedgerItem::CommodityPrice(commodity_price) => writeln!(f, "{}", commodity_price)?,
+            LedgerItem::Include(file) => writeln!(f, "include {}", file)?,
         }
         Ok(())
     }
@@ -53,7 +55,7 @@ impl From<LedgerInternal> for Ledger {
                 }
                 LedgerItem::LineComment(comment) => {
                     if let Some(ref mut c) = current_comment {
-                        c.push_str("\n");
+                        c.push('\n');
                         c.push_str(&comment);
                     } else {
                         current_comment = Some(comment);
@@ -63,8 +65,8 @@ impl From<LedgerInternal> for Ledger {
                     if let Some(current_comment) = current_comment {
                         let mut full_comment = current_comment;
                         if let Some(ref transaction_comment) = transaction.comment {
-                            full_comment.push_str("\n");
-                            full_comment.push_str(&transaction_comment);
+                            full_comment.push('\n');
+                            full_comment.push_str(transaction_comment);
                         }
                         transaction.comment = Some(full_comment);
                     }
@@ -76,12 +78,13 @@ impl From<LedgerInternal> for Ledger {
                     current_comment = None;
                     commodity_prices.push(commodity_price);
                 }
+                LedgerItem::Include(_file) => {}
             }
         }
 
         Ledger {
-            transactions: transactions,
-            commodity_prices: commodity_prices,
+            transactions,
+            commodity_prices,
         }
     }
 }
@@ -108,6 +111,7 @@ mod tests {
                         postings: vec![
                             Posting {
                                 account: "TEST:ABC 123".to_string(),
+                                reality: Reality::Real,
                                 amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
@@ -121,6 +125,7 @@ mod tests {
                             },
                             Posting {
                                 account: "TEST:ABC 123".to_string(),
+                                reality: Reality::Real,
                                 amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
@@ -145,6 +150,7 @@ mod tests {
                         postings: vec![
                             Posting {
                                 account: "TEST:ABC 123".to_string(),
+                                reality: Reality::Real,
                                 amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
@@ -158,6 +164,7 @@ mod tests {
                             },
                             Posting {
                                 account: "TEST:ABC 123".to_string(),
+                                reality: Reality::Real,
                                 amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {

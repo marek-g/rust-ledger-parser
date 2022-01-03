@@ -1,7 +1,7 @@
+use crate::serializer::*;
 use chrono::{NaiveDate, NaiveDateTime};
 use rust_decimal::Decimal;
 use std::fmt;
-use crate::serializer::*;
 
 ///
 /// Main document. Contains transactions and/or commodity prices.
@@ -40,7 +40,7 @@ impl fmt::Display for Transaction {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum TransactionStatus {
     Pending,
     Cleared,
@@ -56,10 +56,18 @@ impl fmt::Display for TransactionStatus {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Posting {
     pub account: String,
+    pub reality: Reality,
     pub amount: Option<Amount>,
     pub balance: Option<Balance>,
     pub status: Option<TransactionStatus>,
     pub comment: Option<String>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum Reality {
+    Real,
+    BalancedVirtual,
+    UnbalancedVirtual,
 }
 
 impl fmt::Display for Posting {
@@ -94,7 +102,7 @@ pub struct Commodity {
     pub position: CommodityPosition,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum CommodityPosition {
     Left,
     Right,
@@ -217,6 +225,7 @@ mod tests {
                 "{}",
                 Posting {
                     account: "Assets:Checking".to_string(),
+                    reality: Reality::Real,
                     amount: Some(Amount {
                         quantity: Decimal::new(4200, 2),
                         commodity: Commodity {
@@ -253,6 +262,7 @@ mod tests {
                 postings: vec![
                     Posting {
                         account: "TEST:ABC 123".to_string(),
+                        reality: Reality::Real,
                         amount: Some(Amount {
                             quantity: Decimal::new(120, 2),
                             commodity: Commodity {
@@ -266,6 +276,7 @@ mod tests {
                     },
                     Posting {
                         account: "TEST:ABC 123".to_string(),
+                        reality: Reality::Real,
                         amount: Some(Amount {
                             quantity: Decimal::new(120, 2),
                             commodity: Commodity {
@@ -305,6 +316,7 @@ mod tests {
                         postings: vec![
                             Posting {
                                 account: "TEST:ABC 123".to_string(),
+                                reality: Reality::Real,
                                 amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
@@ -318,6 +330,7 @@ mod tests {
                             },
                             Posting {
                                 account: "TEST:ABC 123".to_string(),
+                                reality: Reality::Real,
                                 amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
@@ -341,6 +354,7 @@ mod tests {
                         postings: vec![
                             Posting {
                                 account: "TEST:ABC 123".to_string(),
+                                reality: Reality::Real,
                                 amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
@@ -354,6 +368,7 @@ mod tests {
                             },
                             Posting {
                                 account: "TEST:ABC 123".to_string(),
+                                reality: Reality::Real,
                                 amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {

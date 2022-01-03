@@ -1,3 +1,7 @@
+// These lints show up in nom macros
+#![allow(clippy::double_comparisons)]
+#![allow(clippy::manual_range_contains)]
+
 use chrono::{NaiveDate, NaiveDateTime};
 use nom::types::CompleteStr;
 use nom::*;
@@ -14,41 +18,39 @@ enum CustomError {
 }
 
 fn is_digit(c: char) -> bool {
-    (c >= '0' && c <= '9')
+    ('0'..='9').contains(&c)
 }
 
 fn is_commodity_char(c: char) -> bool {
-    !(('0' <= c && c <= '9') || c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '-')
+    !(is_digit(c) || c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '-')
 }
 
 fn is_white_char(c: char) -> bool {
-    (c == ' ' || c == '\t')
+    c == ' ' || c == '\t'
 }
 
 fn is_not_eol_char(c: char) -> bool {
-    (c != '\r' && c != '\n')
+    c != '\r' && c != '\n'
 }
 
 fn is_not_eol_or_comment_char(c: char) -> bool {
-    (c != '\r' && c != '\n' && c != ';')
+    c != '\r' && c != '\n' && c != ';'
 }
 
 fn join_comments(inline_comment: Option<&str>, line_comments: Vec<&str>) -> Option<String> {
     if let Some(ref inline) = inline_comment {
-        if line_comments.len() == 0 {
+        if line_comments.is_empty() {
             inline_comment.map(|s| s.to_string())
         } else {
             let mut full = inline.to_string();
-            full.push_str("\n");
+            full.push('\n');
             full.push_str(&line_comments.join("\n"));
             Some(full)
         }
+    } else if line_comments.is_empty() {
+        None
     } else {
-        if line_comments.len() == 0 {
-            None
-        } else {
-            Some(line_comments.join("\n"))
-        }
+        Some(line_comments.join("\n"))
     }
 }
 
@@ -148,7 +150,7 @@ named!(parse_quantity<CompleteStr, Decimal>,
                     (format!("{}{}", leading, rest))
                 ) >>
                 fractional: opt!(recognize!(preceded!(tag!("."), digit))) >>
-                (format!("{}{}{}", sign.unwrap_or_else(|| CompleteStr("")), decimal, fractional.unwrap_or_else(|| CompleteStr(""))))
+                (format!("{}{}{}", sign.unwrap_or(CompleteStr("")), decimal, fractional.unwrap_or(CompleteStr(""))))
         ),
         |s: String| Decimal::from_str(&s)
     )
@@ -181,7 +183,7 @@ named!(parse_amount<CompleteStr, Amount>,
             opt!(white_spaces) >>
             quantity: parse_quantity >>
             (Amount {
-                quantity: if let Some(_) = neg_opt {
+                quantity: if neg_opt.is_some() {
                     quantity * Decimal::new(-1, 0)
                 } else { quantity },
                 commodity: Commodity {
@@ -196,7 +198,7 @@ named!(parse_amount<CompleteStr, Amount>,
             opt!(white_spaces) >>
             commodity: parse_commodity >>
             (Amount {
-                quantity: quantity,
+                quantity,
                 commodity: Commodity {
                     name: commodity.to_string(),
                     position: CommodityPosition::Right
@@ -231,7 +233,7 @@ named!(parse_commodity_price<CompleteStr, CommodityPrice>,
         amount: parse_amount >>
         opt!(white_spaces) >>
         opt!(parse_inline_comment) >>
-        (CommodityPrice { datetime: datetime, commodity_name: name.to_string(), amount: amount })
+        (CommodityPrice { datetime, commodity_name: name.to_string(), amount })
     )
 );
 
@@ -258,15 +260,23 @@ named!(parse_inline_comment<CompleteStr, &str>,
     )
 );
 
-fn parse_account(text: CompleteStr) -> IResult<CompleteStr, &str> {
-    let mut second_space = false;
-    for ind in text.iter_indices() {
-        let (pos, c) = ind;
+named!(parse_include_file<CompleteStr, &str>,
+    do_parse!(
+        opt!(white_spaces) >>
+        tag!("include") >>
+        white_spaces >>
+        filename: take_while!(is_not_eol_or_comment_char) >>
+        (filename.0)
+    )
+);
 
+fn parse_account(text: CompleteStr) -> IResult<CompleteStr, (&str, Reality)> {
+    let mut second_space = false;
+    for (pos, c) in text.iter_indices() {
         if c == '\t' || c == '\r' || c == '\n' || c == ';' {
             if pos > 0 {
                 let (rest, found) = text.take_split(pos);
-                return Ok((rest, found.0.trim_end()));
+                return Ok((rest, parse_account_reality(found.0.trim_end())));
             } else {
                 return Err(Err::Incomplete(Needed::Size(1)));
             }
@@ -275,7 +285,7 @@ fn parse_account(text: CompleteStr) -> IResult<CompleteStr, &str> {
         if c == ' ' {
             if second_space {
                 let (rest, found) = text.take_split(pos - 1);
-                return Ok((rest, found.0));
+                return Ok((rest, parse_account_reality(found.0)));
             } else {
                 second_space = true;
             }
@@ -283,12 +293,28 @@ fn parse_account(text: CompleteStr) -> IResult<CompleteStr, &str> {
             second_space = false;
 
             if pos == text.len() - 1 && pos > 0 {
-                return Ok((CompleteStr(""), text.0));
+                return Ok((CompleteStr(""), parse_account_reality(text.0)));
             }
         }
     }
 
     Err(Err::Incomplete(Needed::Size(1)))
+}
+
+fn parse_account_reality(name: &str) -> (&str, Reality) {
+    if let Some(n1) = name.strip_prefix('[') {
+        if let Some(n2) = n1.strip_suffix(']') {
+            return (n2, Reality::BalancedVirtual);
+        }
+    }
+
+    if let Some(n1) = name.strip_prefix('(') {
+        if let Some(n2) = n1.strip_suffix(')') {
+            return (n2, Reality::UnbalancedVirtual);
+        }
+    }
+
+    (name, Reality::Real)
 }
 
 named!(parse_transaction_status<CompleteStr, TransactionStatus>,
@@ -326,10 +352,11 @@ named!(parse_posting<CompleteStr, Posting>,
             preceded!(opt!(eol_or_eof), parse_line_comment)
         ) >>
         (Posting {
-            account: account.to_string(),
-            amount: amount,
-            balance: balance,
-            status: status,
+            account: account.0.to_string(),
+            reality: account.1,
+            amount,
+            balance,
+            status,
             comment: join_comments(inline_comment, line_comments),
         })
     ))
@@ -404,14 +431,15 @@ named!(parse_ledger_item<CompleteStr, LedgerItem>,
         map!(terminated!(parse_empty_line, eol_or_eof), |_| { LedgerItem::EmptyLine }) |
         map!(terminated!(parse_line_comment, eol_or_eof), |comment: &str| { LedgerItem::LineComment(comment.to_string()) }) |
         map!(terminated!(parse_transaction, eol_or_eof), |transaction: Transaction| { LedgerItem::Transaction(transaction) }) |
-        map!(terminated!(parse_commodity_price, eol_or_eof), |cm: CommodityPrice| { LedgerItem::CommodityPrice(cm) })
+        map!(terminated!(parse_commodity_price, eol_or_eof), |cm: CommodityPrice| { LedgerItem::CommodityPrice(cm) }) |
+        map!(terminated!(parse_include_file, eol_or_eof), |file: &str| { LedgerItem::Include(file.to_string()) })
     )
 );
 
 named!(pub parse_ledger<CompleteStr, LedgerInternal>,
     do_parse!(
         items: many0!(parse_ledger_item) >>
-        (LedgerInternal { items: items })
+        (LedgerInternal { items })
     )
 );
 
@@ -676,15 +704,26 @@ mod tests {
     fn parse_account_test() {
         assert_eq!(
             parse_account(CompleteStr("TEST:ABC 123  ")),
-            Ok((CompleteStr("  "), "TEST:ABC 123"))
+            Ok((CompleteStr("  "), ("TEST:ABC 123", Reality::Real)))
         );
         assert_eq!(
             parse_account(CompleteStr("TEST:ABC 123\t")),
-            Ok((CompleteStr("\t"), "TEST:ABC 123"))
+            Ok((CompleteStr("\t"), ("TEST:ABC 123", Reality::Real)))
         );
         assert_eq!(
             parse_account(CompleteStr("TEST:ABC 123")),
-            Ok((CompleteStr(""), "TEST:ABC 123"))
+            Ok((CompleteStr(""), ("TEST:ABC 123", Reality::Real)))
+        );
+        assert_eq!(
+            parse_account(CompleteStr("[TEST:ABC 123]")),
+            Ok((CompleteStr(""), ("TEST:ABC 123", Reality::BalancedVirtual)))
+        );
+        assert_eq!(
+            parse_account(CompleteStr("(TEST:ABC 123)")),
+            Ok((
+                CompleteStr(""),
+                ("TEST:ABC 123", Reality::UnbalancedVirtual)
+            ))
         );
     }
 
@@ -708,6 +747,7 @@ mod tests {
                 CompleteStr(""),
                 Posting {
                     account: "TEST:ABC 123".to_string(),
+                    reality: Reality::Real,
                     amount: Some(Amount {
                         quantity: Decimal::new(120, 2),
                         commodity: Commodity {
@@ -727,6 +767,7 @@ mod tests {
                 CompleteStr(""),
                 Posting {
                     account: "TEST:ABC 123".to_string(),
+                    reality: Reality::Real,
                     amount: Some(Amount {
                         quantity: Decimal::new(120, 2),
                         commodity: Commodity {
@@ -746,6 +787,7 @@ mod tests {
                 CompleteStr(""),
                 Posting {
                     account: "TEST:ABC 123".to_string(),
+                    reality: Reality::Real,
                     amount: None,
                     balance: None,
                     status: Some(TransactionStatus::Pending),
@@ -759,6 +801,7 @@ mod tests {
                 CompleteStr(""),
                 Posting {
                     account: "TEST:ABC 123".to_string(),
+                    reality: Reality::Real,
                     amount: None,
                     balance: None,
                     status: Some(TransactionStatus::Pending),
@@ -772,6 +815,7 @@ mod tests {
                 CompleteStr(""),
                 Posting {
                     account: "TEST:ABC 123".to_string(),
+                    reality: Reality::Real,
                     amount: Some(Amount {
                         quantity: Decimal::new(120, 2),
                         commodity: Commodity {
@@ -797,6 +841,7 @@ mod tests {
                 CompleteStr(""),
                 Posting {
                     account: "TEST:ABC 123".to_string(),
+                    reality: Reality::Real,
                     amount: None,
                     balance: None,
                     status: None,
@@ -826,6 +871,7 @@ mod tests {
                     postings: vec![
                         Posting {
                             account: "TEST:ABC 123".to_string(),
+                            reality: Reality::Real,
                             amount: Some(Amount {
                                 quantity: Decimal::new(120, 2),
                                 commodity: Commodity {
@@ -839,6 +885,7 @@ mod tests {
                         },
                         Posting {
                             account: "TEST:ABC 123".to_string(),
+                            reality: Reality::Real,
                             amount: Some(Amount {
                                 quantity: Decimal::new(120, 2),
                                 commodity: Commodity {
@@ -874,6 +921,7 @@ mod tests {
                     postings: vec![
                         Posting {
                             account: "TEST:ABC 123".to_string(),
+                            reality: Reality::Real,
                             amount: Some(Amount {
                                 quantity: Decimal::new(120, 2),
                                 commodity: Commodity {
@@ -888,6 +936,7 @@ mod tests {
                         Posting {
                             balance: None,
                             account: "TEST:DEF 123".to_string(),
+                            reality: Reality::Real,
                             amount: Some(Amount {
                                 quantity: Decimal::new(-120, 2),
                                 commodity: Commodity {
@@ -900,6 +949,7 @@ mod tests {
                         },
                         Posting {
                             account: "TEST:GHI 123".to_string(),
+                            reality: Reality::Real,
                             amount: None,
                             balance: None,
                             status: None,
@@ -907,6 +957,7 @@ mod tests {
                         },
                         Posting {
                             account: "TEST:JKL 123".to_string(),
+                            reality: Reality::Real,
                             amount: Some(Amount {
                                 quantity: Decimal::new(-200, 2),
                                 commodity: Commodity {
@@ -948,9 +999,19 @@ mod tests {
     }
 
     #[test]
+    fn parse_include_test() {
+        assert_eq!(
+            parse_include_file(CompleteStr(r#"include other_file.ledger"#)),
+            Ok((CompleteStr(""), "other_file.ledger"))
+        );
+    }
+
+    #[test]
     fn parse_ledger_test() {
         let res = parse_ledger(CompleteStr(
             r#"; Example 1
+
+include other_file.ledger
 
 P 2017-11-12 12:00:00 mBH 5.00 PLN
 
@@ -966,7 +1027,7 @@ P 2017-11-12 12:00:00 mBH 5.00 PLN
         ))
         .unwrap()
         .1;
-        assert_eq!(res.items.len(), 8);
+        assert_eq!(res.items.len(), 10);
         assert!(match res.items[0] {
             LedgerItem::LineComment(_) => true,
             _ => false,
@@ -976,7 +1037,7 @@ P 2017-11-12 12:00:00 mBH 5.00 PLN
             _ => false,
         });
         assert!(match res.items[2] {
-            LedgerItem::CommodityPrice(_) => true,
+            LedgerItem::Include(_) => true,
             _ => false,
         });
         assert!(match res.items[3] {
@@ -984,18 +1045,26 @@ P 2017-11-12 12:00:00 mBH 5.00 PLN
             _ => false,
         });
         assert!(match res.items[4] {
-            LedgerItem::LineComment(_) => true,
+            LedgerItem::CommodityPrice(_) => true,
             _ => false,
         });
         assert!(match res.items[5] {
-            LedgerItem::Transaction(_) => true,
-            _ => false,
-        });
-        assert!(match res.items[6] {
             LedgerItem::EmptyLine => true,
             _ => false,
         });
+        assert!(match res.items[6] {
+            LedgerItem::LineComment(_) => true,
+            _ => false,
+        });
         assert!(match res.items[7] {
+            LedgerItem::Transaction(_) => true,
+            _ => false,
+        });
+        assert!(match res.items[8] {
+            LedgerItem::EmptyLine => true,
+            _ => false,
+        });
+        assert!(match res.items[9] {
             LedgerItem::Transaction(_) => true,
             _ => false,
         });

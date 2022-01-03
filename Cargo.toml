@@ -9,7 +9,7 @@ readme = "README.md"
 documentation = "https://docs.rs/ledger-parser"
 keywords = ["parser", "ledger", "ledger-cli"]
 categories = ["parser-implementations"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 nom = "4"

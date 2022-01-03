@@ -2,7 +2,14 @@
 
 ## [Unreleased]
 
--
+### Added
+
+- Support for parsing (but ignoring) 'include' directives.
+- Support for virtual postings.
+
+### Changed
+
+- Transitioned to Rust 2021 edition.
 
 ## [3.1.0] - 2020-04-30
 
