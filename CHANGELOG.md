@@ -10,6 +10,7 @@
 ### Changed
 
 - Transitioned to Rust 2021 edition (thanks to Tim Bates).
+- Fix numerical comment being parsed as an amount (thanks to Tim Bates).
 
 ## [3.1.0] - 2020-04-30
 
