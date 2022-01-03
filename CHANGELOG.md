@@ -4,12 +4,12 @@
 
 ### Added
 
-- Support for parsing (but ignoring) 'include' directives.
-- Support for virtual postings.
+- Support for parsing (but ignoring) 'include' directives (thanks to Tim Bates).
+- Support for virtual postings (thanks to Tim Bates).
 
 ### Changed
 
-- Transitioned to Rust 2021 edition.
+- Transitioned to Rust 2021 edition (thanks to Tim Bates).
 
 ## [3.1.0] - 2020-04-30
 
