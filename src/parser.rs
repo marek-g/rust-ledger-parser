@@ -22,7 +22,7 @@ fn is_digit(c: char) -> bool {
 }
 
 fn is_commodity_char(c: char) -> bool {
-    !(is_digit(c) || c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '-')
+    (c != '-') && !is_digit(c) && !is_white_char(c) && is_not_eol_or_comment_char(c)
 }
 
 fn is_white_char(c: char) -> bool {
@@ -846,6 +846,20 @@ mod tests {
                     balance: None,
                     status: None,
                     comment: None
+                }
+            ))
+        );
+        assert_eq!(
+            parse_posting(CompleteStr(" TEST:ABC 123   ; 456")),
+            Ok((
+                CompleteStr(""),
+                Posting {
+                    account: "TEST:ABC 123".to_string(),
+                    reality: Reality::Real,
+                    amount: None,
+                    balance: None,
+                    status: None,
+                    comment: Some("456".to_string()),
                 }
             ))
         );
