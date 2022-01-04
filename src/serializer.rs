@@ -1,6 +1,26 @@
 use crate::model::*;
 use std::io;
 
+#[non_exhaustive]
+pub struct SerializerSettings {
+    indent: String,
+}
+
+impl SerializerSettings {
+    pub fn with_indent(mut self, indent: &str) -> Self {
+        self.indent = indent.to_string();
+        self
+    }
+}
+
+impl Default for SerializerSettings {
+    fn default() -> Self {
+        Self {
+            indent: "  ".to_string(),
+        }
+    }
+}
+
 pub trait Serializer {
     fn write<W>(&self, writer: &mut W, settings: &SerializerSettings) -> Result<(), io::Error>
     where
@@ -12,32 +32,11 @@ pub trait Serializer {
         return std::str::from_utf8(&res).unwrap().to_string();
     }
 }
-pub struct SerializerSettings {
-    indent: String,
-}
-
-impl SerializerSettings {
-    pub fn new() -> Self {
-        SerializerSettings::with_indent("  ")
-    }
-
-    pub fn with_indent(indent: &str) -> Self {
-        SerializerSettings {
-            indent: indent.to_string(),
-        }
-    }
-}
-
-impl Default for SerializerSettings {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 impl Serializer for Ledger {
     fn write<W>(&self, writer: &mut W, settings: &SerializerSettings) -> Result<(), io::Error>
-        where
-            W: io::Write,
+    where
+        W: io::Write,
     {
         for item in &self.items {
             item.write(writer, settings)?;
@@ -48,8 +47,8 @@ impl Serializer for Ledger {
 
 impl Serializer for LedgerItem {
     fn write<W>(&self, writer: &mut W, settings: &SerializerSettings) -> Result<(), io::Error>
-        where
-            W: io::Write,
+    where
+        W: io::Write,
     {
         match self {
             LedgerItem::EmptyLine => write!(writer, "\n")?,
@@ -57,11 +56,11 @@ impl Serializer for LedgerItem {
             LedgerItem::Transaction(transaction) => {
                 transaction.write(writer, settings)?;
                 write!(writer, "\n")?;
-            },
+            }
             LedgerItem::CommodityPrice(commodity_price) => {
                 commodity_price.write(writer, settings)?;
                 write!(writer, "\n")?;
-            },
+            }
             LedgerItem::Include(file) => write!(writer, "include {}\n", file)?,
         }
         Ok(())
@@ -184,7 +183,12 @@ impl Serializer for CommodityPrice {
     where
         W: io::Write,
     {
-        write!(writer, "P {} {} ", self.datetime.format("%Y-%m-%d %H:%M:%S"), self.commodity_name)?;
+        write!(
+            writer,
+            "P {} {} ",
+            self.datetime.format("%Y-%m-%d %H:%M:%S"),
+            self.commodity_name
+        )?;
         self.amount.write(writer, settings)?;
         Ok(())
     }

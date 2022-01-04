@@ -58,5 +58,5 @@ Serializing:
 use ledger_parser::{ Serializer, SerializerSettings };
 
 println!("{}", ledger);
-println!("{}", ledger.to_string_pretty(&SerializerSettings::with_indent("\t")));
+println!("{}", ledger.to_string_pretty(&SerializerSettings::default().with_indent("\t")));
 ```

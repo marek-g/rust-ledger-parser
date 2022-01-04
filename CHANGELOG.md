@@ -11,7 +11,8 @@
 ### Changed
 
 - Transition to Rust 2021 edition (thanks to Tim Bates)
-- Move the simplified model and conversion code to the new 'ledger-utils' crate 
+- Move the simplified model and conversion code to the new 'ledger-utils' crate
+- Make SerializerSettings non-exhaustive
 - Fix numerical comment being parsed as an amount (thanks to Tim Bates)
 - Ensure date & datetime is always serialized properly
 
