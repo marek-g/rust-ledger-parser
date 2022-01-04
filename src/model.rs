@@ -13,11 +13,16 @@ pub struct Ledger {
 
 impl fmt::Display for Ledger {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.to_string_pretty(&SerializerSettings::new()))?;
+        write!(
+            f,
+            "{}",
+            self.to_string_pretty(&SerializerSettings::default())
+        )?;
         Ok(())
     }
 }
 
+#[non_exhaustive]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum LedgerItem {
     EmptyLine,
@@ -29,7 +34,11 @@ pub enum LedgerItem {
 
 impl fmt::Display for LedgerItem {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.to_string_pretty(&SerializerSettings::new()))?;
+        write!(
+            f,
+            "{}",
+            self.to_string_pretty(&SerializerSettings::default())
+        )?;
         Ok(())
     }
 }
@@ -50,7 +59,11 @@ pub struct Transaction {
 
 impl fmt::Display for Transaction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.to_string_pretty(&SerializerSettings::new()))?;
+        write!(
+            f,
+            "{}",
+            self.to_string_pretty(&SerializerSettings::default())
+        )?;
         Ok(())
     }
 }
@@ -63,7 +76,11 @@ pub enum TransactionStatus {
 
 impl fmt::Display for TransactionStatus {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.to_string_pretty(&SerializerSettings::new()))?;
+        write!(
+            f,
+            "{}",
+            self.to_string_pretty(&SerializerSettings::default())
+        )?;
         Ok(())
     }
 }
@@ -87,7 +104,11 @@ pub enum Reality {
 
 impl fmt::Display for Posting {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.to_string_pretty(&SerializerSettings::new()))?;
+        write!(
+            f,
+            "{}",
+            self.to_string_pretty(&SerializerSettings::default())
+        )?;
         Ok(())
     }
 }
@@ -100,7 +121,11 @@ pub struct Amount {
 
 impl fmt::Display for Amount {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.to_string_pretty(&SerializerSettings::new()))?;
+        write!(
+            f,
+            "{}",
+            self.to_string_pretty(&SerializerSettings::default())
+        )?;
         Ok(())
     }
 }
@@ -131,7 +156,11 @@ pub enum Balance {
 
 impl fmt::Display for Balance {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.to_string_pretty(&SerializerSettings::new()))?;
+        write!(
+            f,
+            "{}",
+            self.to_string_pretty(&SerializerSettings::default())
+        )?;
         Ok(())
     }
 }
@@ -148,7 +177,11 @@ pub struct CommodityPrice {
 
 impl fmt::Display for CommodityPrice {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.to_string_pretty(&SerializerSettings::new()))?;
+        write!(
+            f,
+            "{}",
+            self.to_string_pretty(&SerializerSettings::default())
+        )?;
         Ok(())
     }
 }

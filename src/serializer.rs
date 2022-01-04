@@ -4,11 +4,17 @@ use std::io;
 #[non_exhaustive]
 pub struct SerializerSettings {
     indent: String,
+    eol: String,
 }
 
 impl SerializerSettings {
     pub fn with_indent(mut self, indent: &str) -> Self {
         self.indent = indent.to_string();
+        self
+    }
+
+    pub fn with_eol(mut self, eol: &str) -> Self {
+        self.eol = eol.to_string();
         self
     }
 }
@@ -17,6 +23,7 @@ impl Default for SerializerSettings {
     fn default() -> Self {
         Self {
             indent: "  ".to_string(),
+            eol: "\n".to_string(),
         }
     }
 }
@@ -51,17 +58,17 @@ impl Serializer for LedgerItem {
         W: io::Write,
     {
         match self {
-            LedgerItem::EmptyLine => write!(writer, "\n")?,
-            LedgerItem::LineComment(comment) => write!(writer, "; {}\n", comment)?,
+            LedgerItem::EmptyLine => write!(writer, "{}", settings.eol)?,
+            LedgerItem::LineComment(comment) => write!(writer, "; {}{}", comment, settings.eol)?,
             LedgerItem::Transaction(transaction) => {
                 transaction.write(writer, settings)?;
-                write!(writer, "\n")?;
+                write!(writer, "{}", settings.eol)?;
             }
             LedgerItem::CommodityPrice(commodity_price) => {
                 commodity_price.write(writer, settings)?;
-                write!(writer, "\n")?;
+                write!(writer, "{}", settings.eol)?;
             }
-            LedgerItem::Include(file) => write!(writer, "include {}\n", file)?,
+            LedgerItem::Include(file) => write!(writer, "include {}{}", file, settings.eol)?,
         }
         Ok(())
     }
@@ -93,12 +100,12 @@ impl Serializer for Transaction {
 
         if let Some(ref comment) = self.comment {
             for comment in comment.split('\n') {
-                write!(writer, "\n{}; {}", settings.indent, comment)?;
+                write!(writer, "{}{}; {}", settings.eol, settings.indent, comment)?;
             }
         }
 
         for posting in &self.postings {
-            write!(writer, "\n{}", settings.indent)?;
+            write!(writer, "{}{}", settings.eol, settings.indent)?;
             posting.write(writer, settings)?;
         }
 
@@ -146,7 +153,7 @@ impl Serializer for Posting {
 
         if let Some(ref comment) = self.comment {
             for comment in comment.split('\n') {
-                write!(writer, "\n{}; {}", settings.indent, comment)?;
+                write!(writer, "{}{}; {}", settings.eol, settings.indent, comment)?;
             }
         }
 

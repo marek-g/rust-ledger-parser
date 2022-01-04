@@ -7,12 +7,13 @@
 - Support for 'include' directives (thanks to Tim Bates)
 - Support for virtual postings (thanks to Tim Bates)
 - Expose more accurate Ledger model (keep the order of items and expose 'include' directives)
+- Configurable end of line character for Serializer
 
 ### Changed
 
 - Transition to Rust 2021 edition (thanks to Tim Bates)
 - Move the simplified model and conversion code to the new 'ledger-utils' crate
-- Make SerializerSettings non-exhaustive
+- Make SerializerSettings and LedgerItem non-exhaustive
 - Fix numerical comment being parsed as an amount (thanks to Tim Bates)
 - Ensure date & datetime is always serialized properly
 
