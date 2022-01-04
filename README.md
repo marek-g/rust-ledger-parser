@@ -63,4 +63,4 @@ println!("{}", ledger.to_string_pretty(&SerializerSettings::default().with_inden
 
 ## See also
 
-- [ledger-utils](https://crates.io/crates/ledger-utils) - ledger-cli processing tools, useful for calculating balances, creating reports etc.
+- [ledger-utils](https://crates.io/crates/ledger-utils) - ledger-cli file processing Rust library, useful for calculating balances, creating reports etc.
