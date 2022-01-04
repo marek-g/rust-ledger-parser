@@ -4,29 +4,31 @@
 //!
 //! Supported elements:
 //!
-//! * Line comments (starting with: ``; # % | *``)
+//! - Line comments (starting with: ``; # % | *``)
 //!
-//! * Inline comments (starting with ``;``)
+//! - Inline comments (starting with ``;``)
 //!
-//! * Transaction headers with format:
+//! - Transaction headers with format:
 //!
 //!   ```ledger-cli,ignore
 //!   DATE[=EDATE] [*|!] [(CODE)] DESC
 //!   ```
 //!
-//! * Transaction postings with format (minimum two spaces or one tab between ``ACCOUNT`` and ``AMOUNT``):
+//! - Transaction postings with format (minimum two spaces or one tab between ``ACCOUNT`` and ``AMOUNT``):
 //!
 //!   ```ledger-cli,ignore
 //!     ACCOUNT  [AMOUNT] [= BALANCE] [; NOTE]
 //!   ```
 //!
-//!   There may be only a single posting without an amount or balance in a transaction.
+//!     - Virtual accounts are supported
+//!     - There may be only a single posting without an amount or balance in a transaction
 //!
-//! * Commodity prices with format:
+//! - Commodity prices with format:
 //!
 //!   ```ledger-cli,ignore
 //!   P DATE SYMBOL PRICE
 //!   ```
+//! - Command directives: `include`
 
 mod model;
 pub use model::*;
@@ -34,7 +36,6 @@ pub use model::*;
 mod serializer;
 pub use serializer::*;
 
-mod model_internal;
 mod parser;
 
 use std::fmt;
@@ -77,7 +78,7 @@ pub fn parse(input: &str) -> Result<Ledger, ParseError> {
 
     let result = parser::parse_ledger(CompleteStr(input));
     match result {
-        Ok((CompleteStr(""), result)) => Ok(result.into()),
+        Ok((CompleteStr(""), result)) => Ok(result),
         Ok((rest, _)) => Err(ParseError::String(rest.0.to_string())),
         Err(error) => Err(ParseError::String(format!("{:?}", error))),
     }

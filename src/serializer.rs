@@ -36,27 +36,34 @@ impl Default for SerializerSettings {
 
 impl Serializer for Ledger {
     fn write<W>(&self, writer: &mut W, settings: &SerializerSettings) -> Result<(), io::Error>
-    where
-        W: io::Write,
+        where
+            W: io::Write,
     {
-        let mut first = true;
-
-        for commodity_price in &self.commodity_prices {
-            first = false;
-            commodity_price.write(writer, settings)?;
-            writeln!(writer)?;
+        for item in &self.items {
+            item.write(writer, settings)?;
         }
+        Ok(())
+    }
+}
 
-        for transaction in &self.transactions {
-            if !first {
-                writeln!(writer)?;
-            }
-
-            first = false;
-            transaction.write(writer, settings)?;
-            writeln!(writer)?;
+impl Serializer for LedgerItem {
+    fn write<W>(&self, writer: &mut W, settings: &SerializerSettings) -> Result<(), io::Error>
+        where
+            W: io::Write,
+    {
+        match self {
+            LedgerItem::EmptyLine => write!(writer, "\n")?,
+            LedgerItem::LineComment(comment) => write!(writer, "; {}\n", comment)?,
+            LedgerItem::Transaction(transaction) => {
+                transaction.write(writer, settings)?;
+                write!(writer, "\n")?;
+            },
+            LedgerItem::CommodityPrice(commodity_price) => {
+                commodity_price.write(writer, settings)?;
+                write!(writer, "\n")?;
+            },
+            LedgerItem::Include(file) => write!(writer, "include {}\n", file)?,
         }
-
         Ok(())
     }
 }
@@ -66,10 +73,10 @@ impl Serializer for Transaction {
     where
         W: io::Write,
     {
-        write!(writer, "{}", self.date)?;
+        write!(writer, "{}", self.date.format("%Y-%m-%d"))?;
 
         if let Some(effective_date) = self.effective_date {
-            write!(writer, "={}", effective_date)?;
+            write!(writer, "={}", effective_date.format("%Y-%m-%d"))?;
         }
 
         if let Some(ref status) = self.status {
@@ -177,7 +184,7 @@ impl Serializer for CommodityPrice {
     where
         W: io::Write,
     {
-        write!(writer, "P {} {} ", self.datetime, self.commodity_name)?;
+        write!(writer, "P {} {} ", self.datetime.format("%Y-%m-%d %H:%M:%S"), self.commodity_name)?;
         self.amount.write(writer, settings)?;
         Ok(())
     }

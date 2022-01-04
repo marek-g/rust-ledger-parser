@@ -28,13 +28,16 @@ Supported elements:
     ACCOUNT  [AMOUNT] [= BALANCE] [; NOTE]
   ```
 
-  There may be only a single posting without an amount or balance in a transaction.
+  - Virtual accounts are supported
+  - There may be only a single posting without an amount or balance in a transaction
 
 - Commodity prices with format:
 
   ```ledger-cli
   P DATE SYMBOL PRICE
   ```
+
+- Command directives: `include`
 
 ## Example
 

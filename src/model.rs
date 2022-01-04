@@ -8,11 +8,26 @@ use std::fmt;
 ///
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Ledger {
-    pub commodity_prices: Vec<CommodityPrice>,
-    pub transactions: Vec<Transaction>,
+    pub items: Vec<LedgerItem>,
 }
 
 impl fmt::Display for Ledger {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.to_string_pretty(&SerializerSettings::new()))?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum LedgerItem {
+    EmptyLine,
+    LineComment(String),
+    Transaction(Transaction),
+    CommodityPrice(CommodityPrice),
+    Include(String),
+}
+
+impl fmt::Display for LedgerItem {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.to_string_pretty(&SerializerSettings::new()))?;
         Ok(())
@@ -305,8 +320,8 @@ mod tests {
         let actual = format!(
             "{}",
             Ledger {
-                transactions: vec![
-                    Transaction {
+                items: vec![
+                    LedgerItem::Transaction(Transaction {
                         comment: Some("Comment Line 1\nComment Line 2".to_string()),
                         date: NaiveDate::from_ymd(2018, 10, 01),
                         effective_date: Some(NaiveDate::from_ymd(2018, 10, 14)),
@@ -343,8 +358,9 @@ mod tests {
                                 comment: None
                             }
                         ]
-                    },
-                    Transaction {
+                    }),
+                    LedgerItem::EmptyLine,
+                    LedgerItem::Transaction(Transaction {
                         comment: None,
                         date: NaiveDate::from_ymd(2018, 10, 01),
                         effective_date: Some(NaiveDate::from_ymd(2018, 10, 14)),
@@ -381,24 +397,23 @@ mod tests {
                                 comment: None
                             }
                         ]
-                    }
-                ],
-                commodity_prices: vec![CommodityPrice {
-                    datetime: NaiveDate::from_ymd(2017, 11, 12).and_hms(12, 00, 00),
-                    commodity_name: "mBH".to_string(),
-                    amount: Amount {
-                        quantity: Decimal::new(500, 2),
-                        commodity: Commodity {
-                            name: "PLN".to_string(),
-                            position: CommodityPosition::Right
+                    }),
+                    LedgerItem::EmptyLine,
+                    LedgerItem::CommodityPrice(CommodityPrice {
+                        datetime: NaiveDate::from_ymd(2017, 11, 12).and_hms(12, 00, 00),
+                        commodity_name: "mBH".to_string(),
+                        amount: Amount {
+                            quantity: Decimal::new(500, 2),
+                            commodity: Commodity {
+                                name: "PLN".to_string(),
+                                position: CommodityPosition::Right
+                            }
                         }
-                    }
-                }]
+                    }),
+                ]
             }
         );
-        let expected = r#"P 2017-11-12 12:00:00 mBH 5.00 PLN
-
-2018-10-01=2018-10-14 ! (123) Marek Ogarek
+        let expected = r#"2018-10-01=2018-10-14 ! (123) Marek Ogarek
   ; Comment Line 1
   ; Comment Line 2
   TEST:ABC 123  $1.20
@@ -408,6 +423,8 @@ mod tests {
 2018-10-01=2018-10-14 ! (123) Marek Ogarek
   TEST:ABC 123  $1.20
   TEST:ABC 123  $1.20
+
+P 2017-11-12 12:00:00 mBH 5.00 PLN
 "#;
         assert_eq!(actual, expected);
     }
