@@ -49,7 +49,7 @@ let ledger = ledger_parser::parse(r#"; Example 1
   ; Transaction comment
   TEST:Account 123  $1.20
   ; Posting comment
-  TEST:Account 345  -$1.20"#);
+  TEST:Account 345  -$1.20"#)?;
 ```
 
 Serializing:
@@ -60,3 +60,7 @@ use ledger_parser::{ Serializer, SerializerSettings };
 println!("{}", ledger);
 println!("{}", ledger.to_string_pretty(&SerializerSettings::default().with_indent("\t")));
 ```
+
+## See also
+
+- [ledger-utils](https://crates.io/crates/ledger-utils) - ledger-cli processing tools, useful for calculating balances, creating reports etc.
