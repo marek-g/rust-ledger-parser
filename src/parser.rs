@@ -1,39 +1,23 @@
-// These lints show up in nom macros
-#![allow(clippy::double_comparisons)]
-#![allow(clippy::manual_range_contains)]
-
 use chrono::{NaiveDate, NaiveDateTime};
-use nom::types::CompleteStr;
-use nom::*;
+use nom::{
+    branch::alt,
+    bytes::complete::{is_not, tag, take_while1, take_while_m_n},
+    character::complete::{char, digit0, digit1, line_ending, not_line_ending, space0, space1},
+    combinator::{eof, map_opt, map_res, opt, peek, recognize, value, verify},
+    error::VerboseError,
+    multi::{fold_many1, many0, many1},
+    sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
+    AsChar, Err, IResult, Needed, Parser,
+};
 use rust_decimal::Decimal;
 use std::str::FromStr;
 
 use crate::model::*;
 
-enum CustomError {
-    NonExistingDate,
-    MoreThanOnePostingWithoutAmount,
-    NoPostingWithAnAmount,
-}
-
-fn is_digit(c: char) -> bool {
-    ('0'..='9').contains(&c)
-}
+type LedgerParseResult<'a, T> = IResult<&'a str, T, VerboseError<&'a str>>;
 
 fn is_commodity_char(c: char) -> bool {
-    (c != '-') && !is_digit(c) && !is_white_char(c) && is_not_eol_or_comment_char(c)
-}
-
-fn is_white_char(c: char) -> bool {
-    c == ' ' || c == '\t'
-}
-
-fn is_not_eol_char(c: char) -> bool {
-    c != '\r' && c != '\n'
-}
-
-fn is_not_eol_or_comment_char(c: char) -> bool {
-    c != '\r' && c != '\n' && c != ';'
+    !"-0123456789 ;\t\r\n".contains(c)
 }
 
 fn join_comments(inline_comment: Option<&str>, line_comments: Vec<&str>) -> Option<String> {
@@ -53,422 +37,354 @@ fn join_comments(inline_comment: Option<&str>, line_comments: Vec<&str>) -> Opti
     }
 }
 
-named!(white_spaces<CompleteStr, CompleteStr>,
-    take_while1!(is_white_char)
-);
-
-named!(eol_or_eof<CompleteStr, CompleteStr>,
-    alt!(eol | eof!())
-);
-
-named_args!(number_n(n: usize)<CompleteStr, i32>,
-    map_res!(take_while_m_n!(n, n, is_digit), |s: CompleteStr| { i32::from_str(s.0) })
-);
-
-named!(parse_date_internal<CompleteStr, (i32, i32, i32)>,
-    do_parse!(
-        year: call!(number_n, 4) >>
-        alt!(tag!("-") | tag!("/") | tag!(".")) >>
-        month: call!(number_n, 2) >>
-        alt!(tag!("-") | tag!("/") | tag!(".")) >>
-        day: call!(number_n, 2) >>
-        ((year, month, day))
-    )
-);
-
-named!(parse_time_internal<CompleteStr, (i32, i32, i32)>,
-    do_parse!(
-        hour: call!(number_n, 2) >>
-        tag!(":") >>
-        min: call!(number_n, 2) >>
-        tag!(":") >>
-        sec: call!(number_n, 2) >>
-        ((hour, min, sec))
-    )
-);
-
-named!(parse_datetime_internal<CompleteStr, (i32, i32, i32, i32, i32, i32)>,
-    do_parse!(
-        date: parse_date_internal >>
-        white_spaces >>
-        time: parse_time_internal >>
-        ((date.0, date.1, date.2, time.0, time.1, time.2))
-    )
-);
-
-fn parse_date(text: CompleteStr) -> IResult<CompleteStr, NaiveDate> {
-    let res = parse_date_internal(text)?;
-
-    let rest = res.0;
-    let value = res.1;
-
-    let date_opt = NaiveDate::from_ymd_opt(value.0, value.1 as u32, value.2 as u32);
-    if let Some(date) = date_opt {
-        Ok((rest, date))
-    } else {
-        Err(Err::Error(error_position!(
-            CompleteStr(&text.0[0..10]),
-            ErrorKind::Custom(CustomError::NonExistingDate as u32)
-        )))
-    }
+fn eol_or_eof(input: &str) -> LedgerParseResult<&str> {
+    alt((line_ending, eof))(input)
 }
 
-fn parse_datetime(text: CompleteStr) -> IResult<CompleteStr, NaiveDateTime> {
-    let res = parse_datetime_internal(text)?;
-
-    let rest = res.0;
-    let value = res.1;
-
-    let date_opt = NaiveDate::from_ymd_opt(value.0, value.1 as u32, value.2 as u32);
-    if let Some(date) = date_opt {
-        let datetime_opt = date.and_hms_opt(value.3 as u32, value.4 as u32, value.5 as u32);
-        if let Some(datetime) = datetime_opt {
-            return Ok((rest, datetime));
-        }
-    }
-
-    let len = text.len() - rest.len();
-    Err(Err::Error(error_position!(
-        CompleteStr(&text.0[0..len]),
-        ErrorKind::Custom(CustomError::NonExistingDate as u32)
-    )))
+fn number_n<'a>(n: usize) -> impl FnMut(&'a str) -> IResult<&'a str, i32, VerboseError<&str>> {
+    map_res(take_while_m_n(n, n, AsChar::is_dec_digit), i32::from_str)
 }
 
-named!(parse_quantity<CompleteStr, Decimal>,
-    map_res!(
-        do_parse!(
-                sign: opt!(tag!("-")) >>
-                decimal: do_parse!(
-                    leading: take_while_m_n!(1, 3, is_digit) >>
-                    rest: alt!(
-                        map!(
-                            many1!(
-                                preceded!(tag!(","),
-                                    map!(take_while_m_n!(3, 3, is_digit), |group| group.to_string()))), |groups| groups.join("")) |
-                        map!(digit0, |d| d.to_string())) >>
-                    (format!("{}{}", leading, rest))
-                ) >>
-                fractional: opt!(recognize!(preceded!(tag!("."), digit))) >>
-                (format!("{}{}{}", sign.unwrap_or(CompleteStr("")), decimal, fractional.unwrap_or(CompleteStr(""))))
-        ),
-        |s: String| Decimal::from_str(&s)
-    )
-);
+fn parse_date_internal(input: &str) -> LedgerParseResult<(i32, i32, i32)> {
+    tuple((
+        terminated(number_n(4), alt((tag("-"), tag("/"), tag(".")))),
+        terminated(number_n(2), alt((tag("-"), tag("/"), tag(".")))),
+        number_n(2),
+    ))(input)
+}
 
-named!(string_between_quotes<CompleteStr, &str>,
-    map!(
-        delimited!(char!('\"'), is_not!("\""), char!('\"')),
-        |s: CompleteStr| { s.0 }
-    )
-);
+fn parse_time_internal(input: &str) -> LedgerParseResult<(i32, i32, i32)> {
+    tuple((
+        terminated(number_n(2), tag(":")),
+        terminated(number_n(2), tag(":")),
+        number_n(2),
+    ))(input)
+}
 
-named!(commodity_without_quotes<CompleteStr, &str>,
-    map!(
-        take_while1!(is_commodity_char),
-        |s: CompleteStr| { s.0 }
-    )
-);
+fn parse_datetime_internal(input: &str) -> LedgerParseResult<(i32, i32, i32, i32, i32, i32)> {
+    separated_pair(parse_date_internal, space1, parse_time_internal)
+        .map(|(date, time)| (date.0, date.1, date.2, time.0, time.1, time.2))
+        .parse(input)
+}
 
-named!(parse_commodity<CompleteStr, &str>,
-    alt!(string_between_quotes | commodity_without_quotes)
-);
+fn parse_date(input: &str) -> LedgerParseResult<NaiveDate> {
+    map_opt(parse_date_internal, |value| {
+        NaiveDate::from_ymd_opt(value.0, value.1 as u32, value.2 as u32)
+    })(input)
+}
 
-named!(parse_amount<CompleteStr, Amount>,
-    alt!(
-        do_parse!(
-            neg_opt: opt!(tag!("-")) >>
-            opt!(white_spaces) >>
-            commodity: parse_commodity >>
-            opt!(white_spaces) >>
-            quantity: parse_quantity >>
-            (Amount {
-                quantity: if neg_opt.is_some() {
-                    quantity * Decimal::new(-1, 0)
-                } else { quantity },
-                commodity: Commodity {
-                    name: commodity.to_string(),
-                    position: CommodityPosition::Left
-                }
-            })
-        )
-        |
-        do_parse!(
-            quantity: parse_quantity >>
-            opt!(white_spaces) >>
-            commodity: parse_commodity >>
-            (Amount {
-                quantity,
-                commodity: Commodity {
-                    name: commodity.to_string(),
-                    position: CommodityPosition::Right
-                }
-            })
-        )
-    )
-);
+fn parse_datetime(input: &str) -> LedgerParseResult<NaiveDateTime> {
+    map_opt(
+        parse_datetime_internal,
+        |value| match NaiveDate::from_ymd_opt(value.0, value.1 as u32, value.2 as u32) {
+            Some(date) => date.and_hms_opt(value.3 as u32, value.4 as u32, value.5 as u32),
+            None => None,
+        },
+    )(input)
+}
 
-named!(parse_balance<CompleteStr, Balance>,
-    alt!(
-        do_parse!(
-            amount: parse_amount >>
-            (Balance::Amount(amount))
-        )
-        |
-        do_parse!(
-            tag!("0") >>
-            (Balance::Zero)
-        )
-    )
-);
+fn parse_quantity(input: &str) -> LedgerParseResult<Decimal> {
+    map_res(
+        tuple((
+            opt(tag("-")),
+            alt((
+                pair(
+                    take_while_m_n(1, 3, AsChar::is_dec_digit),
+                    many1(preceded(
+                        tag(","),
+                        take_while_m_n(3, 3, AsChar::is_dec_digit).map(str::to_owned),
+                    ))
+                    .map(|groups| groups.join("")),
+                )
+                .map(|(leading, rest)| format!("{}{}", leading, rest)),
+                digit0.map(|d: &str| d.to_string()),
+            )),
+            opt(recognize(preceded(tag("."), digit1))),
+        ))
+        .map(|(sign, decimal, fractional)| {
+            format!(
+                "{}{}{}",
+                sign.unwrap_or(""),
+                decimal,
+                fractional.unwrap_or("")
+            )
+        }),
+        |s: String| Decimal::from_str(&s),
+    )(input)
+}
 
-named!(parse_commodity_price<CompleteStr, CommodityPrice>,
-    do_parse!(
-        tag!("P") >>
-        white_spaces >>
-        datetime: parse_datetime >>
-        white_spaces >>
-        name: parse_commodity >>
-        white_spaces >>
-        amount: parse_amount >>
-        opt!(white_spaces) >>
-        opt!(parse_inline_comment) >>
-        (CommodityPrice { datetime, commodity_name: name.to_string(), amount })
-    )
-);
+fn string_fragment(input: &str) -> LedgerParseResult<&str> {
+    alt((
+        verify(is_not("\\\""), |s: &str| !s.is_empty()),
+        value("\"", tag("\\\"")),
+    ))(input)
+}
 
-named!(parse_empty_line<CompleteStr, CompleteStr>,
-    recognize!(pair!(opt!(white_spaces), peek!(eol_or_eof)))
-);
+fn string_between_quotes(input: &str) -> LedgerParseResult<String> {
+    let string_contents = fold_many1(string_fragment, String::new, |mut string, fragment| {
+        string.push_str(fragment);
+        string
+    });
 
-named!(parse_line_comment<CompleteStr, &str>,
-    do_parse!(
-        opt!(white_spaces) >>
-        alt!(tag!(";") | tag!("#") | tag!("%") | tag!("|") | tag!("*")) >>
-        opt!(white_spaces) >>
-        comment: take_while!(is_not_eol_char) >>
-        (comment.0)
-    )
-);
+    delimited(char('"'), string_contents, char('"'))(input)
+}
 
-named!(parse_inline_comment<CompleteStr, &str>,
-    do_parse!(
-        tag!(";") >>
-        opt!(white_spaces) >>
-        comment: take_while!(is_not_eol_char) >>
-        (comment.0)
-    )
-);
+fn commodity_without_quotes(input: &str) -> LedgerParseResult<String> {
+    take_while1(is_commodity_char)
+        .map(str::to_owned)
+        .parse(input)
+}
 
-named!(parse_include_file<CompleteStr, &str>,
-    do_parse!(
-        opt!(white_spaces) >>
-        tag!("include") >>
-        white_spaces >>
-        filename: take_while!(is_not_eol_or_comment_char) >>
-        (filename.0)
-    )
-);
+fn parse_commodity(input: &str) -> LedgerParseResult<String> {
+    alt((string_between_quotes, commodity_without_quotes))(input)
+}
 
-fn parse_account(text: CompleteStr) -> IResult<CompleteStr, (&str, Reality)> {
+fn parse_amount(input: &str) -> LedgerParseResult<Amount> {
+    alt((
+        tuple((
+            opt(terminated(tag("-"), space0)),
+            terminated(parse_commodity, space0),
+            parse_quantity,
+        ))
+        .map(|(neg_opt, name, quantity)| Amount {
+            quantity: if neg_opt.is_some() {
+                quantity * Decimal::new(-1, 0)
+            } else {
+                quantity
+            },
+            commodity: Commodity {
+                name,
+                position: CommodityPosition::Left,
+            },
+        }),
+        pair(terminated(parse_quantity, space0), parse_commodity).map(|(quantity, name)| Amount {
+            quantity,
+            commodity: Commodity {
+                name,
+                position: CommodityPosition::Right,
+            },
+        }),
+    ))(input)
+}
+
+fn parse_balance(input: &str) -> LedgerParseResult<Balance> {
+    alt((
+        parse_amount.map(Balance::Amount),
+        value(Balance::Zero, tag("0")),
+    ))(input)
+}
+
+fn parse_commodity_price(input: &str) -> LedgerParseResult<CommodityPrice> {
+    let (input, _) = tag("P")(input)?;
+    let (input, datetime) = preceded(space1, parse_datetime)(input)?;
+    let (input, commodity_name) = preceded(space1, parse_commodity)(input)?;
+    let (input, amount) = preceded(space1, parse_amount)(input)?;
+    let (input, _) = opt(preceded(space0, parse_inline_comment))(input)?;
+
+    Ok((
+        input,
+        CommodityPrice {
+            datetime,
+            commodity_name,
+            amount,
+        },
+    ))
+}
+
+fn parse_empty_line(input: &str) -> LedgerParseResult<&str> {
+    alt((
+        terminated(space0, line_ending),
+        terminated(space1, eof), // Must consume something or many0 errors to prevent infinite loop
+    ))(input)
+}
+
+fn parse_line_comment(input: &str) -> LedgerParseResult<&str> {
+    let (input, _) = delimited(
+        space0,
+        alt((char(';'), char('#'), char('%'), char('|'), char('*'))),
+        space0,
+    )(input)?;
+    not_line_ending(input)
+}
+
+fn parse_inline_comment(input: &str) -> LedgerParseResult<&str> {
+    let (input, _) = terminated(tag(";"), space0)(input)?;
+    not_line_ending(input)
+}
+
+fn parse_include_file(input: &str) -> LedgerParseResult<&str> {
+    let (input, _) = delimited(space0, tag("include"), space1)(input)?;
+    verify(not_line_ending, |s: &str| !s.is_empty())(input)
+}
+
+fn take_until_hard_separator(input: &str) -> LedgerParseResult<&str> {
     let mut second_space = false;
-    for (pos, c) in text.iter_indices() {
+    for (pos, c) in input.char_indices() {
         if c == '\t' || c == '\r' || c == '\n' || c == ';' {
             if pos > 0 {
-                let (rest, found) = text.take_split(pos);
-                return Ok((rest, parse_account_reality(found.0.trim_end())));
+                let (found, rest) = if second_space {
+                    input.split_at(pos - 1)
+                } else {
+                    input.split_at(pos)
+                };
+                return Ok((rest, found));
             } else {
-                return Err(Err::Incomplete(Needed::Size(1)));
+                return Err(Err::Incomplete(Needed::new(1)));
             }
         }
 
         if c == ' ' {
             if second_space {
-                let (rest, found) = text.take_split(pos - 1);
-                return Ok((rest, parse_account_reality(found.0)));
+                let (found, rest) = input.split_at(pos - 1);
+                return Ok((rest, found));
             } else {
                 second_space = true;
             }
         } else {
             second_space = false;
 
-            if pos == text.len() - 1 && pos > 0 {
-                return Ok((CompleteStr(""), parse_account_reality(text.0)));
+            if pos == input.len() - 1 && pos > 0 {
+                return Ok(("", input));
             }
         }
     }
 
-    Err(Err::Incomplete(Needed::Size(1)))
+    Err(Err::Incomplete(Needed::new(1)))
 }
 
-fn parse_account_reality(name: &str) -> (&str, Reality) {
+fn parse_account(input: &str) -> LedgerParseResult<(&str, Reality)> {
+    let (input, name) = take_until_hard_separator(input)?;
+
     if let Some(n1) = name.strip_prefix('[') {
         if let Some(n2) = n1.strip_suffix(']') {
-            return (n2, Reality::BalancedVirtual);
+            return Ok((input, (n2, Reality::BalancedVirtual)));
         }
     }
 
     if let Some(n1) = name.strip_prefix('(') {
         if let Some(n2) = n1.strip_suffix(')') {
-            return (n2, Reality::UnbalancedVirtual);
+            return Ok((input, (n2, Reality::UnbalancedVirtual)));
         }
     }
 
-    (name, Reality::Real)
+    Ok((input, (name, Reality::Real)))
 }
 
-named!(parse_transaction_status<CompleteStr, TransactionStatus>,
-    do_parse!(
-        status: alt!(tag!("*") | tag!("!")) >>
-        (if status == CompleteStr("*") { TransactionStatus::Cleared } else { TransactionStatus::Pending })
-    )
-);
+fn parse_transaction_status(input: &str) -> LedgerParseResult<TransactionStatus> {
+    alt((
+        value(TransactionStatus::Cleared, char('*')),
+        value(TransactionStatus::Pending, char('!')),
+    ))(input)
+}
 
-named!(parse_posting<CompleteStr, Posting>,
-    complete!(do_parse!(
-        white_spaces >>
-        status: opt!(parse_transaction_status) >>
-        opt!(white_spaces) >>
-        account: parse_account >>
-        amount: alt!(
-            do_parse!(
-                white_spaces >>
-                amount: parse_amount >>
-                opt!(white_spaces) >>
-                (Some(amount))) |
-            do_parse!(
-                opt!(white_spaces) >>
-                (None))
-        ) >>
-        balance:  opt!(do_parse!(
-            tag!("=") >>
-            opt!(white_spaces) >>
-            balance: parse_balance >>
-            (balance)
-        )) >>
-        opt!(white_spaces) >>
-        inline_comment: opt!(parse_inline_comment) >>
-        line_comments: many0!(
-            preceded!(opt!(eol_or_eof), parse_line_comment)
-        ) >>
-        (Posting {
-            account: account.0.to_string(),
-            reality: account.1,
+fn parse_posting(input: &str) -> LedgerParseResult<Posting> {
+    let (input, _) = space1(input)?;
+    let (input, status) = opt(parse_transaction_status)(input)?;
+    let (input, _) = space0(input)?;
+    let (input, (account, reality)) = parse_account(input)?;
+    let (input, _) = space0(input)?;
+    let (input, amount) = opt(parse_amount)(input)?;
+    let (input, balance) =
+        opt(preceded(delimited(space0, tag("="), space0), parse_balance))(input)?;
+    let (input, _) = space0(input)?;
+    let (input, inline_comment) = opt(parse_inline_comment)(input)?;
+    let (input, line_comments) = many0(preceded(opt(eol_or_eof), parse_line_comment))(input)?;
+    Ok((
+        input,
+        Posting {
+            account: account.to_owned(),
+            reality,
             amount,
             balance,
             status,
             comment: join_comments(inline_comment, line_comments),
-        })
+        },
     ))
-);
-
-fn validate_transaction(
-    input: CompleteStr,
-    transaction: Transaction,
-) -> IResult<CompleteStr, Transaction> {
-    let mut seen_empty_posting = false;
-    for posting in &transaction.postings {
-        if posting.amount.is_none() && posting.balance.is_none() {
-            if seen_empty_posting {
-                return Err(Err::Error(error_position!(
-                    input,
-                    ErrorKind::Custom(CustomError::MoreThanOnePostingWithoutAmount as u32)
-                )));
-            } else {
-                seen_empty_posting = true;
-            }
-        }
-    }
-    if seen_empty_posting && transaction.postings.len() == 1 {
-        return Err(Err::Error(error_position!(
-            input,
-            ErrorKind::Custom(CustomError::NoPostingWithAnAmount as u32)
-        )));
-    }
-    Ok((input, transaction))
 }
 
-named!(parse_transaction<CompleteStr, Transaction>,
-    do_parse!(
-        date: parse_date >>
-        effective_date: opt!(do_parse!(
-            tag!("=") >>
-            edate: parse_date >>
-            (edate)
-        )) >>
-        white_spaces >>
-        status: opt!(parse_transaction_status) >>
-        opt!(white_spaces) >>
-        code: opt!(map!(delimited!(char!('('), is_not!(")"), char!(')')),
-            |s: CompleteStr| { s.0.to_string() })) >>
-        opt!(white_spaces) >>
-        description: map!(take_while!(is_not_eol_or_comment_char),
-            |s: CompleteStr| { s.0.trim_end().to_string() }) >>
-        inline_comment: opt!(parse_inline_comment) >>
-        line_comments: many0!(
-            preceded!(opt!(eol_or_eof), parse_line_comment)
-        ) >>
-        postings: many1!(
-            preceded!(opt!(eol_or_eof), parse_posting)
-        ) >>
-        transaction: apply!(validate_transaction,
-            Transaction {
-                comment: join_comments(inline_comment, line_comments),
-                date,
-                effective_date,
-                status,
-                code,
-                description,
-                postings
-            }
-        ) >>
-        (transaction)
-    )
-);
+fn parse_payee(input: &str) -> LedgerParseResult<&str> {
+    alt((
+        terminated(take_until_hard_separator, peek(pair(space1, tag(";")))),
+        not_line_ending,
+    ))(input)
+}
 
-named!(parse_ledger_item<CompleteStr, LedgerItem>,
-    alt!(
-        map!(terminated!(parse_empty_line, eol_or_eof), |_| { LedgerItem::EmptyLine }) |
-        map!(terminated!(parse_line_comment, eol_or_eof), |comment: &str| { LedgerItem::LineComment(comment.to_string()) }) |
-        map!(terminated!(parse_transaction, eol_or_eof), |transaction: Transaction| { LedgerItem::Transaction(transaction) }) |
-        map!(terminated!(parse_commodity_price, eol_or_eof), |cm: CommodityPrice| { LedgerItem::CommodityPrice(cm) }) |
-        map!(terminated!(parse_include_file, eol_or_eof), |file: &str| { LedgerItem::Include(file.to_string()) })
-    )
-);
+fn parse_transaction(input: &str) -> LedgerParseResult<Transaction> {
+    let (input, date) = parse_date(input)?;
+    let (input, effective_date) = opt(preceded(tag("="), parse_date))(input)?;
+    let (input, status) = opt(preceded(space1, parse_transaction_status))(input)?;
+    let (input, code) = opt(preceded(
+        space1,
+        delimited(char('('), is_not(")"), char(')')),
+    ))(input)?;
+    let (input, description) = preceded(space1, parse_payee)(input)?;
+    let (input, _) = space0(input)?;
+    let (input, inline_comment) = opt(parse_inline_comment)(input)?;
+    let (input, line_comments) = many0(preceded(opt(eol_or_eof), parse_line_comment))(input)?;
+    let (input, postings) = many1(preceded(opt(eol_or_eof), parse_posting))(input)?;
 
-named!(pub parse_ledger<CompleteStr, Ledger>,
-    do_parse!(
-        items: many0!(parse_ledger_item) >>
-        (Ledger { items })
-    )
-);
+    Ok((
+        input,
+        Transaction {
+            comment: join_comments(inline_comment, line_comments),
+            date,
+            effective_date,
+            status,
+            code: code.map(str::to_owned),
+            description: description.to_owned(),
+            postings,
+        },
+    ))
+}
+
+fn parse_ledger_item(input: &str) -> LedgerParseResult<LedgerItem> {
+    alt((
+        value(LedgerItem::EmptyLine, parse_empty_line),
+        terminated(parse_line_comment, eol_or_eof)
+            .map(str::to_owned)
+            .map(LedgerItem::LineComment),
+        terminated(parse_transaction, eol_or_eof).map(LedgerItem::Transaction),
+        terminated(parse_commodity_price, eol_or_eof).map(LedgerItem::CommodityPrice),
+        terminated(parse_include_file, eol_or_eof)
+            .map(str::to_owned)
+            .map(LedgerItem::Include),
+    ))(input)
+}
+
+pub fn parse_ledger(input: &str) -> LedgerParseResult<Ledger> {
+    let (input, items) = many0(parse_ledger_item)(input)?;
+    let (input, _) = eof(input)?;
+
+    Ok((input, Ledger { items }))
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nom::types::CompleteStr;
-    use nom::Context::Code;
-    use nom::Err::Error;
-    use nom::ErrorKind::Custom;
+    use nom::{
+        error::{ErrorKind, ParseError},
+        Err::Error,
+    };
 
     #[test]
     fn parse_date_test() {
         assert_eq!(
-            parse_date(CompleteStr("2017-03-24")),
-            Ok((CompleteStr(""), NaiveDate::from_ymd(2017, 03, 24)))
+            parse_date("2017-03-24"),
+            Ok(("", NaiveDate::from_ymd(2017, 3, 24)))
         );
         assert_eq!(
-            parse_date(CompleteStr("2017/03/24")),
-            Ok((CompleteStr(""), NaiveDate::from_ymd(2017, 03, 24)))
+            parse_date("2017/03/24"),
+            Ok(("", NaiveDate::from_ymd(2017, 3, 24)))
         );
         assert_eq!(
-            parse_date(CompleteStr("2017.03.24")),
-            Ok((CompleteStr(""), NaiveDate::from_ymd(2017, 03, 24)))
+            parse_date("2017.03.24"),
+            Ok(("", NaiveDate::from_ymd(2017, 3, 24)))
         );
         assert_eq!(
-            parse_date(CompleteStr("2017-13-24")),
-            Err(Error(Code(
-                CompleteStr("2017-13-24"),
-                Custom(CustomError::NonExistingDate as u32)
+            parse_date("2017-13-24"),
+            Err(Error(ParseError::from_error_kind(
+                "2017-13-24",
+                ErrorKind::MapOpt
             )))
         );
     }
@@ -476,98 +392,59 @@ mod tests {
     #[test]
     fn parse_datetime_test() {
         assert_eq!(
-            parse_datetime(CompleteStr("2017-03-24 17:15:23")),
-            Ok((
-                CompleteStr(""),
-                NaiveDate::from_ymd(2017, 03, 24).and_hms(17, 15, 23)
-            ))
+            parse_datetime("2017-03-24 17:15:23"),
+            Ok(("", NaiveDate::from_ymd(2017, 3, 24).and_hms(17, 15, 23)))
         );
         assert_eq!(
-            parse_datetime(CompleteStr("2017-13-24 22:11:22")),
-            Err(Error(Code(
-                CompleteStr("2017-13-24 22:11:22"),
-                Custom(CustomError::NonExistingDate as u32)
+            parse_datetime("2017-13-24 22:11:22"),
+            Err(Error(ParseError::from_error_kind(
+                "2017-13-24 22:11:22",
+                ErrorKind::MapOpt
             )))
         );
         assert_eq!(
-            parse_datetime(CompleteStr("2017-03-24 25:11:22")),
-            Err(Error(Code(
-                CompleteStr("2017-03-24 25:11:22"),
-                Custom(CustomError::NonExistingDate as u32)
+            parse_datetime("2017-03-24 25:11:22"),
+            Err(Error(ParseError::from_error_kind(
+                "2017-03-24 25:11:22",
+                ErrorKind::MapOpt
             )))
         );
     }
 
     #[test]
     fn parse_quantity_test() {
+        assert_eq!(parse_quantity("1000"), Ok(("", Decimal::new(1000, 0))));
+        assert_eq!(parse_quantity("2.02"), Ok(("", Decimal::new(202, 2))));
+        assert_eq!(parse_quantity("-12.13"), Ok(("", Decimal::new(-1213, 2))));
+        assert_eq!(parse_quantity("0.1"), Ok(("", Decimal::new(1, 1))));
+        assert_eq!(parse_quantity("3"), Ok(("", Decimal::new(3, 0))));
+        assert_eq!(parse_quantity("1"), Ok(("", Decimal::new(1, 0))));
+        assert_eq!(parse_quantity("1,000"), Ok(("", Decimal::new(1000, 0))));
         assert_eq!(
-            parse_quantity(CompleteStr("1000")),
-            Ok((CompleteStr(""), Decimal::new(1000, 0)))
-        );
-        assert_eq!(
-            parse_quantity(CompleteStr("2.02")),
-            Ok((CompleteStr(""), Decimal::new(202, 2)))
-        );
-        assert_eq!(
-            parse_quantity(CompleteStr("-12.13")),
-            Ok((CompleteStr(""), Decimal::new(-1213, 2)))
-        );
-        assert_eq!(
-            parse_quantity(CompleteStr("0.1")),
-            Ok((CompleteStr(""), Decimal::new(1, 1)))
-        );
-        assert_eq!(
-            parse_quantity(CompleteStr("3")),
-            Ok((CompleteStr(""), Decimal::new(3, 0)))
-        );
-        assert_eq!(
-            parse_quantity(CompleteStr("1")),
-            Ok((CompleteStr(""), Decimal::new(1, 0)))
-        );
-        assert_eq!(
-            parse_quantity(CompleteStr("1,000")),
-            Ok((CompleteStr(""), Decimal::new(1000, 0)))
-        );
-        assert_eq!(
-            parse_quantity(CompleteStr("12,456,132.14")),
-            Ok((CompleteStr(""), Decimal::new(1245613214, 2)))
+            parse_quantity("12,456,132.14"),
+            Ok(("", Decimal::new(1245613214, 2)))
         );
     }
 
     #[test]
     fn parse_commodity_test() {
         assert_eq!(
-            parse_commodity(CompleteStr("\"ABC 123\"")),
-            Ok((CompleteStr(""), "ABC 123"))
+            parse_commodity("\"ABC 123\""),
+            Ok(("", "ABC 123".to_owned()))
         );
-        assert_eq!(
-            parse_commodity(CompleteStr("ABC ")),
-            Ok((CompleteStr(" "), "ABC"))
-        );
-        assert_eq!(
-            parse_commodity(CompleteStr("$1")),
-            Ok((CompleteStr("1"), "$"))
-        );
-        assert_eq!(
-            parse_commodity(CompleteStr("€1")),
-            Ok((CompleteStr("1"), "€"))
-        );
-        assert_eq!(
-            parse_commodity(CompleteStr("€ ")),
-            Ok((CompleteStr(" "), "€"))
-        );
-        assert_eq!(
-            parse_commodity(CompleteStr("€-1")),
-            Ok((CompleteStr("-1"), "€"))
-        );
+        assert_eq!(parse_commodity("ABC "), Ok((" ", "ABC".to_owned())));
+        assert_eq!(parse_commodity("$1"), Ok(("1", "$".to_owned())));
+        assert_eq!(parse_commodity("€1"), Ok(("1", "€".to_owned())));
+        assert_eq!(parse_commodity("€ "), Ok((" ", "€".to_owned())));
+        assert_eq!(parse_commodity("€-1"), Ok(("-1", "€".to_owned())));
     }
 
     #[test]
     fn parse_amount_test() {
         assert_eq!(
-            parse_amount(CompleteStr("$1.20")),
+            parse_amount("$1.20"),
             Ok((
-                CompleteStr(""),
+                "",
                 Amount {
                     quantity: Decimal::new(120, 2),
                     commodity: Commodity {
@@ -578,9 +455,9 @@ mod tests {
             ))
         );
         assert_eq!(
-            parse_amount(CompleteStr("$-1.20")),
+            parse_amount("$-1.20"),
             Ok((
-                CompleteStr(""),
+                "",
                 Amount {
                     quantity: Decimal::new(-120, 2),
                     commodity: Commodity {
@@ -591,9 +468,9 @@ mod tests {
             ))
         );
         assert_eq!(
-            parse_amount(CompleteStr("-$1.20")),
+            parse_amount("-$1.20"),
             Ok((
-                CompleteStr(""),
+                "",
                 Amount {
                     quantity: Decimal::new(-120, 2),
                     commodity: Commodity {
@@ -604,9 +481,9 @@ mod tests {
             ))
         );
         assert_eq!(
-            parse_amount(CompleteStr("- $ 1.20")),
+            parse_amount("- $ 1.20"),
             Ok((
-                CompleteStr(""),
+                "",
                 Amount {
                     quantity: Decimal::new(-120, 2),
                     commodity: Commodity {
@@ -617,9 +494,9 @@ mod tests {
             ))
         );
         assert_eq!(
-            parse_amount(CompleteStr("1.20USD")),
+            parse_amount("1.20USD"),
             Ok((
-                CompleteStr(""),
+                "",
                 Amount {
                     quantity: Decimal::new(120, 2),
                     commodity: Commodity {
@@ -630,9 +507,9 @@ mod tests {
             ))
         );
         assert_eq!(
-            parse_amount(CompleteStr("-1.20 USD")),
+            parse_amount("-1.20 USD"),
             Ok((
-                CompleteStr(""),
+                "",
                 Amount {
                     quantity: Decimal::new(-120, 2),
                     commodity: Commodity {
@@ -647,9 +524,9 @@ mod tests {
     #[test]
     fn parse_balance_test() {
         assert_eq!(
-            parse_balance(CompleteStr("$1.20")),
+            parse_balance("$1.20"),
             Ok((
-                CompleteStr(""),
+                "",
                 Balance::Amount(Amount {
                     quantity: Decimal::new(120, 2),
                     commodity: Commodity {
@@ -660,9 +537,9 @@ mod tests {
             ))
         );
         assert_eq!(
-            parse_balance(CompleteStr("0 PLN")),
+            parse_balance("0 PLN"),
             Ok((
-                CompleteStr(""),
+                "",
                 Balance::Amount(Amount {
                     quantity: Decimal::new(0, 0),
                     commodity: Commodity {
@@ -672,18 +549,15 @@ mod tests {
                 })
             ))
         );
-        assert_eq!(
-            parse_balance(CompleteStr("0")),
-            Ok((CompleteStr(""), Balance::Zero))
-        );
+        assert_eq!(parse_balance("0"), Ok(("", Balance::Zero)));
     }
 
     #[test]
     fn parse_commodity_price_test() {
         assert_eq!(
-            parse_commodity_price(CompleteStr("P 2017-11-12 12:00:00 mBH 5.00 PLN")),
+            parse_commodity_price("P 2017-11-12 12:00:00 mBH 5.00 PLN"),
             Ok((
-                CompleteStr(""),
+                "",
                 CommodityPrice {
                     datetime: NaiveDate::from_ymd(2017, 11, 12).and_hms(12, 00, 00),
                     commodity_name: "mBH".to_string(),
@@ -702,48 +576,45 @@ mod tests {
     #[test]
     fn parse_account_test() {
         assert_eq!(
-            parse_account(CompleteStr("TEST:ABC 123  ")),
-            Ok((CompleteStr("  "), ("TEST:ABC 123", Reality::Real)))
+            parse_account("TEST:ABC 123  "),
+            Ok(("  ", ("TEST:ABC 123", Reality::Real)))
         );
         assert_eq!(
-            parse_account(CompleteStr("TEST:ABC 123\t")),
-            Ok((CompleteStr("\t"), ("TEST:ABC 123", Reality::Real)))
+            parse_account("TEST:ABC 123\t"),
+            Ok(("\t", ("TEST:ABC 123", Reality::Real)))
         );
         assert_eq!(
-            parse_account(CompleteStr("TEST:ABC 123")),
-            Ok((CompleteStr(""), ("TEST:ABC 123", Reality::Real)))
+            parse_account("TEST:ABC 123"),
+            Ok(("", ("TEST:ABC 123", Reality::Real)))
         );
         assert_eq!(
-            parse_account(CompleteStr("[TEST:ABC 123]")),
-            Ok((CompleteStr(""), ("TEST:ABC 123", Reality::BalancedVirtual)))
+            parse_account("[TEST:ABC 123]"),
+            Ok(("", ("TEST:ABC 123", Reality::BalancedVirtual)))
         );
         assert_eq!(
-            parse_account(CompleteStr("(TEST:ABC 123)")),
-            Ok((
-                CompleteStr(""),
-                ("TEST:ABC 123", Reality::UnbalancedVirtual)
-            ))
+            parse_account("(TEST:ABC 123)"),
+            Ok(("", ("TEST:ABC 123", Reality::UnbalancedVirtual)))
         );
     }
 
     #[test]
     fn parse_transaction_status_test() {
         assert_eq!(
-            parse_transaction_status(CompleteStr("!")),
-            Ok((CompleteStr(""), TransactionStatus::Pending))
+            parse_transaction_status("!"),
+            Ok(("", TransactionStatus::Pending))
         );
         assert_eq!(
-            parse_transaction_status(CompleteStr("*")),
-            Ok((CompleteStr(""), TransactionStatus::Cleared))
+            parse_transaction_status("*"),
+            Ok(("", TransactionStatus::Cleared))
         );
     }
 
     #[test]
     fn parse_posting_test() {
         assert_eq!(
-            parse_posting(CompleteStr(" TEST:ABC 123  $1.20")),
+            parse_posting(" TEST:ABC 123  $1.20"),
             Ok((
-                CompleteStr(""),
+                "",
                 Posting {
                     account: "TEST:ABC 123".to_string(),
                     reality: Reality::Real,
@@ -761,9 +632,9 @@ mod tests {
             ))
         );
         assert_eq!(
-            parse_posting(CompleteStr(" ! TEST:ABC 123  $1.20;test\n;comment line 2")),
+            parse_posting(" ! TEST:ABC 123  $1.20;test\n;comment line 2"),
             Ok((
-                CompleteStr(""),
+                "",
                 Posting {
                     account: "TEST:ABC 123".to_string(),
                     reality: Reality::Real,
@@ -781,9 +652,9 @@ mod tests {
             ))
         );
         assert_eq!(
-            parse_posting(CompleteStr(" ! TEST:ABC 123;test\n;comment line 2")),
+            parse_posting(" ! TEST:ABC 123;test\n;comment line 2"),
             Ok((
-                CompleteStr(""),
+                "",
                 Posting {
                     account: "TEST:ABC 123".to_string(),
                     reality: Reality::Real,
@@ -795,9 +666,9 @@ mod tests {
             ))
         );
         assert_eq!(
-            parse_posting(CompleteStr(" ! TEST:ABC 123 ;test\n;comment line 2")),
+            parse_posting(" ! TEST:ABC 123 ;test\n;comment line 2"),
             Ok((
-                CompleteStr(""),
+                "",
                 Posting {
                     account: "TEST:ABC 123".to_string(),
                     reality: Reality::Real,
@@ -809,9 +680,9 @@ mod tests {
             ))
         );
         assert_eq!(
-            parse_posting(CompleteStr(" TEST:ABC 123  $1.20 = $2.40 ;comment")),
+            parse_posting(" TEST:ABC 123  $1.20 = $2.40 ;comment"),
             Ok((
-                CompleteStr(""),
+                "",
                 Posting {
                     account: "TEST:ABC 123".to_string(),
                     reality: Reality::Real,
@@ -835,9 +706,9 @@ mod tests {
             ))
         );
         assert_eq!(
-            parse_posting(CompleteStr(" TEST:ABC 123")),
+            parse_posting(" TEST:ABC 123"),
             Ok((
-                CompleteStr(""),
+                "",
                 Posting {
                     account: "TEST:ABC 123".to_string(),
                     reality: Reality::Real,
@@ -849,9 +720,9 @@ mod tests {
             ))
         );
         assert_eq!(
-            parse_posting(CompleteStr(" TEST:ABC 123   ; 456")),
+            parse_posting(" TEST:ABC 123   ; 456"),
             Ok((
-                CompleteStr(""),
+                "",
                 Posting {
                     account: "TEST:ABC 123".to_string(),
                     reality: Reality::Real,
@@ -867,16 +738,16 @@ mod tests {
     #[test]
     fn parse_transaction_test() {
         assert_eq!(
-            parse_transaction(CompleteStr(
+            parse_transaction(
                 r#"2018-10-01=2018-10-14 ! (123) Marek Ogarek
  TEST:ABC 123  $1.20 ; test
  TEST:ABC 123  $1.20"#
-            )),
+            ),
             Ok((
-                CompleteStr(""),
+                "",
                 Transaction {
                     comment: None,
-                    date: NaiveDate::from_ymd(2018, 10, 01),
+                    date: NaiveDate::from_ymd(2018, 10, 1),
                     effective_date: Some(NaiveDate::from_ymd(2018, 10, 14)),
                     status: Some(TransactionStatus::Pending),
                     code: Some("123".to_string()),
@@ -915,21 +786,21 @@ mod tests {
             ))
         );
         assert_eq!(
-            parse_transaction(CompleteStr(
-                r#"2018-10-01=2018-10-14 ! (123) Marek Ogarek
+            parse_transaction(
+                r#"2018-10-01=2018-10-14 Marek Ogarek
  TEST:ABC 123  $1.20 ; test
  TEST:DEF 123  EUR-1.20
  TEST:GHI 123
  TEST:JKL 123  EUR-2.00"#
-            )),
+            ),
             Ok((
-                CompleteStr(""),
+                "",
                 Transaction {
                     comment: None,
-                    date: NaiveDate::from_ymd(2018, 10, 01),
+                    date: NaiveDate::from_ymd(2018, 10, 1),
                     effective_date: Some(NaiveDate::from_ymd(2018, 10, 14)),
-                    status: Some(TransactionStatus::Pending),
-                    code: Some("123".to_string()),
+                    status: None,
+                    code: None,
                     description: "Marek Ogarek".to_string(),
                     postings: vec![
                         Posting {
@@ -986,42 +857,19 @@ mod tests {
                 }
             ))
         );
-        assert_eq!(
-            parse_transaction(CompleteStr(
-                r#"2018-10-01=2018-10-14 ! (123) Marek Ogarek
- TEST:ABC 123  $1.20 ; test
- TEST:DEF 123
- TEST:GHI 123
- TEST:JKL 123  EUR-2.00"#
-            )),
-            Err(Error(Code(
-                CompleteStr(""),
-                ErrorKind::Custom(CustomError::MoreThanOnePostingWithoutAmount as u32)
-            )))
-        );
-        assert_eq!(
-            parse_transaction(CompleteStr(
-                r#"2018-10-01=2018-10-14 ! (123) Marek Ogarek
- TEST:ABC 123   ; test"#
-            )),
-            Err(Error(Code(
-                CompleteStr(""),
-                ErrorKind::Custom(CustomError::NoPostingWithAnAmount as u32)
-            )))
-        );
     }
 
     #[test]
     fn parse_include_test() {
         assert_eq!(
-            parse_include_file(CompleteStr(r#"include other_file.ledger"#)),
-            Ok((CompleteStr(""), "other_file.ledger"))
+            parse_include_file(r#"include other_file.ledger"#),
+            Ok(("", "other_file.ledger"))
         );
     }
 
     #[test]
     fn parse_ledger_test() {
-        let res = parse_ledger(CompleteStr(
+        let res = parse_ledger(
             r#"; Example 1
 
 include other_file.ledger
@@ -1037,7 +885,7 @@ P 2017-11-12 12:00:00 mBH 5.00 PLN
  TEST:ABC 123  $1.20
  TEST:ABC 123  $1.20
 "#,
-        ))
+        )
         .unwrap()
         .1;
         assert_eq!(res.items.len(), 10);
