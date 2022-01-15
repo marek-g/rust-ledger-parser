@@ -223,7 +223,7 @@ fn parse_include_file(input: &str) -> LedgerParseResult<&str> {
 fn take_until_hard_separator(input: &str) -> LedgerParseResult<&str> {
     let mut second_space = false;
     for (pos, c) in input.char_indices() {
-        if c == '\t' || c == '\r' || c == '\n' || c == ';' {
+        if c == '\t' || c == '\r' || c == '\n' {
             if pos > 0 {
                 let (found, rest) = if second_space {
                     input.split_at(pos - 1)
@@ -658,21 +658,21 @@ mod tests {
             ))
         );
         assert_eq!(
-            parse_posting(" ! TEST:ABC 123;test\n;comment line 2"),
+            parse_posting(" ! TEST:ABC 123;test\n;comment"),
             Ok((
                 "",
                 Posting {
-                    account: "TEST:ABC 123".to_string(),
+                    account: "TEST:ABC 123;test".to_string(),
                     reality: Reality::Real,
                     amount: None,
                     balance: None,
                     status: Some(TransactionStatus::Pending),
-                    comment: Some("test\ncomment line 2".to_string())
+                    comment: Some("comment".to_string())
                 }
             ))
         );
         assert_eq!(
-            parse_posting(" ! TEST:ABC 123 ;test\n;comment line 2"),
+            parse_posting(" ! TEST:ABC 123  ;test\n;comment line 2"),
             Ok((
                 "",
                 Posting {
@@ -808,7 +808,7 @@ mod tests {
         );
         assert_eq!(
             parse_transaction(
-                r#"2018-10-01=2018-10-14 Marek Ogarek
+                r#"2018-10-01=2018-10-14 Marek Ogarek ; one space
  TEST:ABC 123  $1.20 ; test
  TEST:DEF 123  EUR-1.20
  TEST:GHI 123
@@ -822,7 +822,7 @@ mod tests {
                     effective_date: Some(NaiveDate::from_ymd(2018, 10, 14)),
                     status: None,
                     code: None,
-                    description: "Marek Ogarek".to_string(),
+                    description: "Marek Ogarek ; one space".to_string(),
                     postings: vec![
                         Posting {
                             account: "TEST:ABC 123".to_string(),
@@ -870,6 +870,48 @@ mod tests {
                                     position: CommodityPosition::Left
                                 }
                             }),
+                            balance: None,
+                            status: None,
+                            comment: None,
+                        },
+                    ]
+                }
+            ))
+        );
+        assert_eq!(
+            parse_transaction(
+                r#"2018-10-01=2018-10-14 ! (123) Marek Ogarek  two spaces
+ TEST:ABC 123  $1.20 ; test
+ TEST:DEF 123"#
+            ),
+            Ok((
+                "",
+                Transaction {
+                    comment: None,
+                    date: NaiveDate::from_ymd(2018, 10, 1),
+                    effective_date: Some(NaiveDate::from_ymd(2018, 10, 14)),
+                    status: Some(TransactionStatus::Pending),
+                    code: Some("123".to_string()),
+                    description: "Marek Ogarek  two spaces".to_string(),
+                    postings: vec![
+                        Posting {
+                            account: "TEST:ABC 123".to_string(),
+                            reality: Reality::Real,
+                            amount: Some(Amount {
+                                quantity: Decimal::new(120, 2),
+                                commodity: Commodity {
+                                    name: "$".to_string(),
+                                    position: CommodityPosition::Left
+                                }
+                            }),
+                            balance: None,
+                            status: None,
+                            comment: Some("test".to_string()),
+                        },
+                        Posting {
+                            account: "TEST:DEF 123".to_string(),
+                            reality: Reality::Real,
+                            amount: None,
                             balance: None,
                             status: None,
                             comment: None,

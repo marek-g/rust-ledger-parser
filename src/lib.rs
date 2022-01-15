@@ -8,10 +8,10 @@
 //!
 //! - Inline comments (starting with ``;``)
 //!
-//! - Transaction headers with format:
+//! - Transaction headers with format (minimum two spaces or one tab between `DESC` and `NOTE`):
 //!
 //!   ```ledger-cli,ignore
-//!   DATE[=EDATE] [*|!] [(CODE)] DESC
+//!   DATE[=EDATE] [*|!] [(CODE)] DESC  [; NOTE]
 //!   ```
 //!
 //! - Transaction postings with format (minimum two spaces or one tab between ``ACCOUNT`` and ``AMOUNT``):
