@@ -1041,45 +1041,15 @@ P 2017-11-12 12:00:00 mBH 5.00 PLN
         .unwrap()
         .1;
         assert_eq!(res.items.len(), 10);
-        assert!(match res.items[0] {
-            LedgerItem::LineComment(_) => true,
-            _ => false,
-        });
-        assert!(match res.items[1] {
-            LedgerItem::EmptyLine => true,
-            _ => false,
-        });
-        assert!(match res.items[2] {
-            LedgerItem::Include(_) => true,
-            _ => false,
-        });
-        assert!(match res.items[3] {
-            LedgerItem::EmptyLine => true,
-            _ => false,
-        });
-        assert!(match res.items[4] {
-            LedgerItem::CommodityPrice(_) => true,
-            _ => false,
-        });
-        assert!(match res.items[5] {
-            LedgerItem::EmptyLine => true,
-            _ => false,
-        });
-        assert!(match res.items[6] {
-            LedgerItem::LineComment(_) => true,
-            _ => false,
-        });
-        assert!(match res.items[7] {
-            LedgerItem::Transaction(_) => true,
-            _ => false,
-        });
-        assert!(match res.items[8] {
-            LedgerItem::EmptyLine => true,
-            _ => false,
-        });
-        assert!(match res.items[9] {
-            LedgerItem::Transaction(_) => true,
-            _ => false,
-        });
+        assert!(matches!(res.items[0], LedgerItem::LineComment(_)));
+        assert!(matches!(res.items[1], LedgerItem::EmptyLine));
+        assert!(matches!(res.items[2], LedgerItem::Include(_)));
+        assert!(matches!(res.items[3], LedgerItem::EmptyLine));
+        assert!(matches!(res.items[4], LedgerItem::CommodityPrice(_)));
+        assert!(matches!(res.items[5], LedgerItem::EmptyLine));
+        assert!(matches!(res.items[6], LedgerItem::LineComment(_)));
+        assert!(matches!(res.items[7], LedgerItem::Transaction(_)));
+        assert!(matches!(res.items[8], LedgerItem::EmptyLine));
+        assert!(matches!(res.items[9], LedgerItem::Transaction(_)));
     }
 }
