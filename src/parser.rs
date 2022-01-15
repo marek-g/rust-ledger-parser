@@ -21,19 +21,17 @@ fn is_commodity_char(c: char) -> bool {
 }
 
 fn join_comments(inline_comment: Option<&str>, line_comments: Vec<&str>) -> Option<String> {
-    if let Some(ref inline) = inline_comment {
-        if line_comments.is_empty() {
-            inline_comment.map(|s| s.to_string())
-        } else {
-            let mut full = inline.to_string();
+    if let Some(inline) = inline_comment {
+        let mut full: String = inline.to_owned();
+        if !line_comments.is_empty() {
             full.push('\n');
             full.push_str(&line_comments.join("\n"));
-            Some(full)
         }
-    } else if line_comments.is_empty() {
-        None
-    } else {
+        Some(full)
+    } else if !line_comments.is_empty() {
         Some(line_comments.join("\n"))
+    } else {
+        None
     }
 }
 
@@ -93,11 +91,10 @@ fn parse_quantity(input: &str) -> LedgerParseResult<Decimal> {
                     many1(preceded(
                         tag(","),
                         take_while_m_n(3, 3, AsChar::is_dec_digit).map(str::to_owned),
-                    ))
-                    .map(|groups| groups.join("")),
+                    )),
                 )
-                .map(|(leading, rest)| format!("{}{}", leading, rest)),
-                digit0.map(|d: &str| d.to_string()),
+                .map(|(leading, rest)| format!("{}{}", leading, rest.join(""))),
+                digit0.map(str::to_owned),
             )),
             opt(recognize(preceded(tag("."), digit1))),
         ))
