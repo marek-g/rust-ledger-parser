@@ -179,7 +179,7 @@ fn parse_commodity_price(input: &str) -> LedgerParseResult<CommodityPrice> {
     let (input, datetime) = preceded(space1, parse_datetime)(input)?;
     let (input, commodity_name) = preceded(space1, parse_commodity)(input)?;
     let (input, amount) = preceded(space1, parse_amount)(input)?;
-    let (input, _) = opt(preceded(space0, parse_inline_comment))(input)?;
+    let (input, _) = alt((preceded(space0, parse_inline_comment), eol_or_eof))(input)?;
 
     Ok((
         input,
@@ -204,17 +204,20 @@ fn parse_line_comment(input: &str) -> LedgerParseResult<&str> {
         alt((char(';'), char('#'), char('%'), char('|'), char('*'))),
         space0,
     )(input)?;
-    not_line_ending(input)
+    terminated(not_line_ending.map(str::trim_end), eol_or_eof)(input)
 }
 
 fn parse_inline_comment(input: &str) -> LedgerParseResult<&str> {
     let (input, _) = terminated(tag(";"), space0)(input)?;
-    not_line_ending(input)
+    terminated(not_line_ending.map(str::trim_end), eol_or_eof)(input)
 }
 
 fn parse_include_file(input: &str) -> LedgerParseResult<&str> {
     let (input, _) = delimited(space0, tag("include"), space1)(input)?;
-    verify(not_line_ending, |s: &str| !s.is_empty())(input)
+    verify(
+        terminated(not_line_ending, eol_or_eof).map(str::trim_end),
+        |s: &str| !s.is_empty(),
+    )(input)
 }
 
 fn take_until_hard_separator(input: &str) -> LedgerParseResult<&str> {
@@ -287,8 +290,10 @@ fn parse_posting(input: &str) -> LedgerParseResult<Posting> {
     let (input, balance) =
         opt(preceded(delimited(space0, tag("="), space0), parse_balance))(input)?;
     let (input, _) = space0(input)?;
-    let (input, inline_comment) = opt(parse_inline_comment)(input)?;
-    let (input, line_comments) = many0(preceded(opt(eol_or_eof), parse_line_comment))(input)?;
+    let (input, inline_comment) =
+        alt((parse_inline_comment.map(Some), value(None, eol_or_eof)))(input)?;
+    let (input, line_comments) = many0(parse_line_comment)(input)?;
+
     Ok((
         input,
         Posting {
@@ -319,9 +324,10 @@ fn parse_transaction(input: &str) -> LedgerParseResult<Transaction> {
     ))(input)?;
     let (input, description) = preceded(space1, parse_payee)(input)?;
     let (input, _) = space0(input)?;
-    let (input, inline_comment) = opt(parse_inline_comment)(input)?;
-    let (input, line_comments) = many0(preceded(opt(eol_or_eof), parse_line_comment))(input)?;
-    let (input, postings) = many1(preceded(opt(eol_or_eof), parse_posting))(input)?;
+    let (input, inline_comment) =
+        alt((parse_inline_comment.map(Some), value(None, eol_or_eof)))(input)?;
+    let (input, line_comments) = many0(parse_line_comment)(input)?;
+    let (input, postings) = many1(parse_posting)(input)?;
 
     Ok((
         input,
@@ -340,12 +346,12 @@ fn parse_transaction(input: &str) -> LedgerParseResult<Transaction> {
 fn parse_ledger_item(input: &str) -> LedgerParseResult<LedgerItem> {
     alt((
         value(LedgerItem::EmptyLine, parse_empty_line),
-        terminated(parse_line_comment, eol_or_eof)
+        parse_line_comment
             .map(str::to_owned)
             .map(LedgerItem::LineComment),
-        terminated(parse_transaction, eol_or_eof).map(LedgerItem::Transaction),
-        terminated(parse_commodity_price, eol_or_eof).map(LedgerItem::CommodityPrice),
-        terminated(parse_include_file, eol_or_eof)
+        parse_transaction.map(LedgerItem::Transaction),
+        parse_commodity_price.map(LedgerItem::CommodityPrice),
+        parse_include_file
             .map(str::to_owned)
             .map(LedgerItem::Include),
     ))(input)
@@ -680,6 +686,20 @@ mod tests {
             ))
         );
         assert_eq!(
+            parse_posting(" ! TEST:ABC 123   ;  test     \n       ;        comment line 2     "),
+            Ok((
+                "",
+                Posting {
+                    account: "TEST:ABC 123".to_string(),
+                    reality: Reality::Real,
+                    amount: None,
+                    balance: None,
+                    status: Some(TransactionStatus::Pending),
+                    comment: Some("test\ncomment line 2".to_string())
+                }
+            ))
+        );
+        assert_eq!(
             parse_posting(" TEST:ABC 123  $1.20 = $2.40 ;comment"),
             Ok((
                 "",
@@ -739,14 +759,15 @@ mod tests {
     fn parse_transaction_test() {
         assert_eq!(
             parse_transaction(
-                r#"2018-10-01=2018-10-14 ! (123) Marek Ogarek
- TEST:ABC 123  $1.20 ; test
+                r#"2018-10-01=2018-10-14 ! (123) Marek Ogarek  ; Transaction comment
+ TEST:ABC 123  $1.20 ; Posting comment
+                     ; over two lines
  TEST:ABC 123  $1.20"#
             ),
             Ok((
                 "",
                 Transaction {
-                    comment: None,
+                    comment: Some("Transaction comment".to_string()),
                     date: NaiveDate::from_ymd(2018, 10, 1),
                     effective_date: Some(NaiveDate::from_ymd(2018, 10, 14)),
                     status: Some(TransactionStatus::Pending),
@@ -765,7 +786,7 @@ mod tests {
                             }),
                             balance: None,
                             status: None,
-                            comment: Some("test".to_string()),
+                            comment: Some("Posting comment\nover two lines".to_string()),
                         },
                         Posting {
                             account: "TEST:ABC 123".to_string(),
