@@ -1,7 +1,11 @@
+use crate::parser;
 use crate::serializer::*;
+use crate::ParseError;
 use chrono::{NaiveDate, NaiveDateTime};
+use nom::{error::convert_error, Finish};
 use rust_decimal::Decimal;
 use std::fmt;
+use std::str::FromStr;
 
 ///
 /// Main document. Contains transactions and/or commodity prices.
@@ -9,6 +13,18 @@ use std::fmt;
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Ledger {
     pub items: Vec<LedgerItem>,
+}
+
+impl FromStr for Ledger {
+    type Err = ParseError;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        let result = parser::parse_ledger(input);
+        match result.finish() {
+            Ok((_, result)) => Ok(result),
+            Err(error) => Err(ParseError::String(convert_error(input, error))),
+        }
+    }
 }
 
 impl fmt::Display for Ledger {
