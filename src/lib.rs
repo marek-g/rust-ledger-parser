@@ -8,10 +8,10 @@
 //!
 //! - Inline comments (starting with ``;``)
 //!
-//! - Transaction headers with format:
+//! - Transaction headers with format (minimum two spaces or one tab between `DESC` and `NOTE`):
 //!
 //!   ```ledger-cli,ignore
-//!   DATE[=EDATE] [*|!] [(CODE)] DESC
+//!   DATE[=EDATE] [*|!] [(CODE)] DESC  [; NOTE]
 //!   ```
 //!
 //! - Transaction postings with format (minimum two spaces or one tab between ``ACCOUNT`` and ``AMOUNT``):
@@ -21,7 +21,6 @@
 //!   ```
 //!
 //!     - Virtual accounts are supported
-//!     - There may be only a single posting without an amount or balance in a transaction
 //!
 //! - Commodity prices with format:
 //!
@@ -38,6 +37,7 @@ pub use serializer::*;
 
 mod parser;
 
+use nom::{error::convert_error, Finish};
 use std::fmt;
 
 #[derive(Debug)]
@@ -65,7 +65,7 @@ impl std::error::Error for ParseError {
 ///
 /// # Examples
 ///
-/// ```rust,ignore
+/// ```
 /// let result = ledger_parser::parse(r#"; Example 1
 /// 2018-10-01=2018-10-14 ! (123) Description
 ///   ; Transaction comment
@@ -74,12 +74,9 @@ impl std::error::Error for ParseError {
 ///   TEST:Account 345  -$1.20"#);
 /// ```
 pub fn parse(input: &str) -> Result<Ledger, ParseError> {
-    use nom::types::CompleteStr;
-
-    let result = parser::parse_ledger(CompleteStr(input));
-    match result {
-        Ok((CompleteStr(""), result)) => Ok(result),
-        Ok((rest, _)) => Err(ParseError::String(rest.0.to_string())),
-        Err(error) => Err(ParseError::String(format!("{:?}", error))),
+    let result = parser::parse_ledger(input);
+    match result.finish() {
+        Ok((_, result)) => Ok(result),
+        Err(error) => Err(ParseError::String(convert_error(input, error))),
     }
 }
