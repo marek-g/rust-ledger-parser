@@ -1,13 +1,13 @@
 # Changelog
 
-## [Unreleased]
+## [4.1.0] - 2022-01-18
 
 ### Changes
 
 - Rewrite parser to use nom v7 (thanks to Tim Bates)
 - Require hard separator between payee name and transaction inline comment (thanks to Tim Bates) 
 
-## [4.0.0] - 2021-01-04
+## [4.0.0] - 2022-01-04
 
 ### Added
 
