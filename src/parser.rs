@@ -252,22 +252,22 @@ fn take_until_hard_separator(input: &str) -> LedgerParseResult<&str> {
     Err(Err::Incomplete(Needed::new(1)))
 }
 
-fn parse_account(input: &str) -> LedgerParseResult<(&str, Reality)> {
+fn parse_account(input: &str) -> LedgerParseResult<Account> {
     let (input, name) = take_until_hard_separator(input)?;
 
     if let Some(n1) = name.strip_prefix('[') {
         if let Some(n2) = n1.strip_suffix(']') {
-            return Ok((input, (n2, Reality::BalancedVirtual)));
+            return Ok((input, Account::BalancedVirtual(n2.to_owned())));
         }
     }
 
     if let Some(n1) = name.strip_prefix('(') {
         if let Some(n2) = n1.strip_suffix(')') {
-            return Ok((input, (n2, Reality::UnbalancedVirtual)));
+            return Ok((input, Account::UnbalancedVirtual(n2.to_owned())));
         }
     }
 
-    Ok((input, (name, Reality::Real)))
+    Ok((input, Account::Real(name.to_owned())))
 }
 
 fn parse_transaction_status(input: &str) -> LedgerParseResult<TransactionStatus> {
@@ -281,7 +281,7 @@ fn parse_posting(input: &str) -> LedgerParseResult<Posting> {
     let (input, _) = space1(input)?;
     let (input, status) = opt(parse_transaction_status)(input)?;
     let (input, _) = space0(input)?;
-    let (input, (account, reality)) = parse_account(input)?;
+    let (input, account) = parse_account(input)?;
     let (input, _) = space0(input)?;
     let (input, amount) = opt(parse_amount)(input)?;
     let (input, balance) =
@@ -294,8 +294,7 @@ fn parse_posting(input: &str) -> LedgerParseResult<Posting> {
     Ok((
         input,
         Posting {
-            account: account.to_owned(),
-            reality,
+            account,
             amount,
             balance,
             status,
@@ -580,23 +579,23 @@ mod tests {
     fn parse_account_test() {
         assert_eq!(
             parse_account("TEST:ABC 123  "),
-            Ok(("  ", ("TEST:ABC 123", Reality::Real)))
+            Ok(("  ", Account::Real("TEST:ABC 123".to_owned())))
         );
         assert_eq!(
             parse_account("TEST:ABC 123\t"),
-            Ok(("\t", ("TEST:ABC 123", Reality::Real)))
+            Ok(("\t", Account::Real("TEST:ABC 123".to_owned())))
         );
         assert_eq!(
             parse_account("TEST:ABC 123"),
-            Ok(("", ("TEST:ABC 123", Reality::Real)))
+            Ok(("", Account::Real("TEST:ABC 123".to_owned())))
         );
         assert_eq!(
             parse_account("[TEST:ABC 123]"),
-            Ok(("", ("TEST:ABC 123", Reality::BalancedVirtual)))
+            Ok(("", Account::BalancedVirtual("TEST:ABC 123".to_owned())))
         );
         assert_eq!(
             parse_account("(TEST:ABC 123)"),
-            Ok(("", ("TEST:ABC 123", Reality::UnbalancedVirtual)))
+            Ok(("", Account::UnbalancedVirtual("TEST:ABC 123".to_owned())))
         );
     }
 
@@ -619,8 +618,7 @@ mod tests {
             Ok((
                 "",
                 Posting {
-                    account: "TEST:ABC 123".to_string(),
-                    reality: Reality::Real,
+                    account: Account::Real("TEST:ABC 123".to_string()),
                     amount: Some(Amount {
                         quantity: Decimal::new(120, 2),
                         commodity: Commodity {
@@ -639,8 +637,7 @@ mod tests {
             Ok((
                 "",
                 Posting {
-                    account: "TEST:ABC 123".to_string(),
-                    reality: Reality::Real,
+                    account: Account::Real("TEST:ABC 123".to_string()),
                     amount: Some(Amount {
                         quantity: Decimal::new(120, 2),
                         commodity: Commodity {
@@ -659,8 +656,7 @@ mod tests {
             Ok((
                 "",
                 Posting {
-                    account: "TEST:ABC 123;test".to_string(),
-                    reality: Reality::Real,
+                    account: Account::Real("TEST:ABC 123;test".to_string()),
                     amount: None,
                     balance: None,
                     status: Some(TransactionStatus::Pending),
@@ -673,8 +669,7 @@ mod tests {
             Ok((
                 "",
                 Posting {
-                    account: "TEST:ABC 123".to_string(),
-                    reality: Reality::Real,
+                    account: Account::Real("TEST:ABC 123".to_string()),
                     amount: None,
                     balance: None,
                     status: Some(TransactionStatus::Pending),
@@ -687,8 +682,7 @@ mod tests {
             Ok((
                 "",
                 Posting {
-                    account: "TEST:ABC 123".to_string(),
-                    reality: Reality::Real,
+                    account: Account::Real("TEST:ABC 123".to_string()),
                     amount: None,
                     balance: None,
                     status: Some(TransactionStatus::Pending),
@@ -701,8 +695,7 @@ mod tests {
             Ok((
                 "",
                 Posting {
-                    account: "TEST:ABC 123".to_string(),
-                    reality: Reality::Real,
+                    account: Account::Real("TEST:ABC 123".to_string()),
                     amount: Some(Amount {
                         quantity: Decimal::new(120, 2),
                         commodity: Commodity {
@@ -727,8 +720,7 @@ mod tests {
             Ok((
                 "",
                 Posting {
-                    account: "TEST:ABC 123".to_string(),
-                    reality: Reality::Real,
+                    account: Account::Real("TEST:ABC 123".to_string()),
                     amount: None,
                     balance: None,
                     status: None,
@@ -741,8 +733,7 @@ mod tests {
             Ok((
                 "",
                 Posting {
-                    account: "TEST:ABC 123".to_string(),
-                    reality: Reality::Real,
+                    account: Account::Real("TEST:ABC 123".to_string()),
                     amount: None,
                     balance: None,
                     status: None,
@@ -772,8 +763,7 @@ mod tests {
                     description: "Marek Ogarek".to_string(),
                     postings: vec![
                         Posting {
-                            account: "TEST:ABC 123".to_string(),
-                            reality: Reality::Real,
+                            account: Account::Real("TEST:ABC 123".to_string()),
                             amount: Some(Amount {
                                 quantity: Decimal::new(120, 2),
                                 commodity: Commodity {
@@ -786,8 +776,7 @@ mod tests {
                             comment: Some("Posting comment\nover two lines".to_string()),
                         },
                         Posting {
-                            account: "TEST:ABC 123".to_string(),
-                            reality: Reality::Real,
+                            account: Account::Real("TEST:ABC 123".to_string()),
                             amount: Some(Amount {
                                 quantity: Decimal::new(120, 2),
                                 commodity: Commodity {
@@ -822,8 +811,7 @@ mod tests {
                     description: "Marek Ogarek ; one space".to_string(),
                     postings: vec![
                         Posting {
-                            account: "TEST:ABC 123".to_string(),
-                            reality: Reality::Real,
+                            account: Account::Real("TEST:ABC 123".to_string()),
                             amount: Some(Amount {
                                 quantity: Decimal::new(120, 2),
                                 commodity: Commodity {
@@ -837,8 +825,7 @@ mod tests {
                         },
                         Posting {
                             balance: None,
-                            account: "TEST:DEF 123".to_string(),
-                            reality: Reality::Real,
+                            account: Account::Real("TEST:DEF 123".to_string()),
                             amount: Some(Amount {
                                 quantity: Decimal::new(-120, 2),
                                 commodity: Commodity {
@@ -850,16 +837,14 @@ mod tests {
                             comment: None,
                         },
                         Posting {
-                            account: "TEST:GHI 123".to_string(),
-                            reality: Reality::Real,
+                            account: Account::Real("TEST:GHI 123".to_string()),
                             amount: None,
                             balance: None,
                             status: None,
                             comment: None,
                         },
                         Posting {
-                            account: "TEST:JKL 123".to_string(),
-                            reality: Reality::Real,
+                            account: Account::Real("TEST:JKL 123".to_string()),
                             amount: Some(Amount {
                                 quantity: Decimal::new(-200, 2),
                                 commodity: Commodity {
@@ -892,8 +877,7 @@ mod tests {
                     description: "Marek Ogarek  two spaces".to_string(),
                     postings: vec![
                         Posting {
-                            account: "TEST:ABC 123".to_string(),
-                            reality: Reality::Real,
+                            account: Account::Real("TEST:ABC 123".to_string()),
                             amount: Some(Amount {
                                 quantity: Decimal::new(120, 2),
                                 commodity: Commodity {
@@ -906,8 +890,7 @@ mod tests {
                             comment: Some("test".to_string()),
                         },
                         Posting {
-                            account: "TEST:DEF 123".to_string(),
-                            reality: Reality::Real,
+                            account: Account::Real("TEST:DEF 123".to_string()),
                             amount: None,
                             balance: None,
                             status: None,

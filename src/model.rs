@@ -87,19 +87,11 @@ impl fmt::Display for TransactionStatus {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Posting {
-    pub account: String,
-    pub reality: Reality,
+    pub account: Account,
     pub amount: Option<Amount>,
     pub balance: Option<Balance>,
     pub status: Option<TransactionStatus>,
     pub comment: Option<String>,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum Reality {
-    Real,
-    BalancedVirtual,
-    UnbalancedVirtual,
 }
 
 impl fmt::Display for Posting {
@@ -113,7 +105,25 @@ impl fmt::Display for Posting {
     }
 }
 
-#[derive(PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum Account {
+    Real(String),
+    BalancedVirtual(String),
+    UnbalancedVirtual(String),
+}
+
+impl fmt::Display for Account {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            self.to_string_pretty(&SerializerSettings::default())
+        )?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Amount {
     pub quantity: Decimal,
     pub commodity: Commodity,
@@ -127,12 +137,6 @@ impl fmt::Display for Amount {
             self.to_string_pretty(&SerializerSettings::default())
         )?;
         Ok(())
-    }
-}
-
-impl fmt::Debug for Amount {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        fmt::Display::fmt(self, f)
     }
 }
 
@@ -272,8 +276,7 @@ mod tests {
             format!(
                 "{}",
                 Posting {
-                    account: "Assets:Checking".to_string(),
-                    reality: Reality::Real,
+                    account: Account::Real("Assets:Checking".to_string()),
                     amount: Some(Amount {
                         quantity: Decimal::new(4200, 2),
                         commodity: Commodity {
@@ -309,8 +312,7 @@ mod tests {
                 description: "Marek Ogarek".to_string(),
                 postings: vec![
                     Posting {
-                        account: "TEST:ABC 123".to_string(),
-                        reality: Reality::Real,
+                        account: Account::Real("TEST:ABC 123".to_string()),
                         amount: Some(Amount {
                             quantity: Decimal::new(120, 2),
                             commodity: Commodity {
@@ -323,8 +325,7 @@ mod tests {
                         comment: Some("dd".to_string())
                     },
                     Posting {
-                        account: "TEST:ABC 123".to_string(),
-                        reality: Reality::Real,
+                        account: Account::Real("TEST:ABC 123".to_string()),
                         amount: Some(Amount {
                             quantity: Decimal::new(120, 2),
                             commodity: Commodity {
@@ -363,8 +364,7 @@ mod tests {
                         description: "Marek Ogarek".to_string(),
                         postings: vec![
                             Posting {
-                                account: "TEST:ABC 123".to_string(),
-                                reality: Reality::Real,
+                                account: Account::Real("TEST:ABC 123".to_string()),
                                 amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
@@ -377,8 +377,7 @@ mod tests {
                                 comment: Some("dd".to_string())
                             },
                             Posting {
-                                account: "TEST:ABC 123".to_string(),
-                                reality: Reality::Real,
+                                account: Account::Real("TEST:ABC 123".to_string()),
                                 amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
@@ -402,8 +401,7 @@ mod tests {
                         description: "Marek Ogarek".to_string(),
                         postings: vec![
                             Posting {
-                                account: "TEST:ABC 123".to_string(),
-                                reality: Reality::Real,
+                                account: Account::Real("TEST:ABC 123".to_string()),
                                 amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
@@ -416,8 +414,7 @@ mod tests {
                                 comment: None
                             },
                             Posting {
-                                account: "TEST:ABC 123".to_string(),
-                                reality: Reality::Real,
+                                account: Account::Real("TEST:ABC 123".to_string()),
                                 amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
