@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [5.0.0] - 2022-01-22
 
 - Implement posting commodity and lot prices
 
