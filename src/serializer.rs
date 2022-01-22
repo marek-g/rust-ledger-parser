@@ -135,7 +135,11 @@ impl Serializer for Posting {
             write!(writer, " ")?;
         }
 
-        self.account.write(writer, settings)?;
+        match self.reality {
+            Reality::Real => write!(writer, "{}", self.account)?,
+            Reality::BalancedVirtual => write!(writer, "[{}]", self.account)?,
+            Reality::UnbalancedVirtual => write!(writer, "({})", self.account)?,
+        }
 
         if let Some(ref amount) = self.amount {
             write!(writer, "{}", settings.indent)?;
@@ -151,21 +155,6 @@ impl Serializer for Posting {
             for comment in comment.split('\n') {
                 write!(writer, "{}{}; {}", settings.eol, settings.indent, comment)?;
             }
-        }
-
-        Ok(())
-    }
-}
-
-impl Serializer for Account {
-    fn write<W>(&self, writer: &mut W, _settings: &SerializerSettings) -> Result<(), io::Error>
-    where
-        W: io::Write,
-    {
-        match self {
-            Account::Real(name) => write!(writer, "{}", name)?,
-            Account::BalancedVirtual(name) => write!(writer, "[{}]", name)?,
-            Account::UnbalancedVirtual(name) => write!(writer, "({})", name)?,
         }
 
         Ok(())
