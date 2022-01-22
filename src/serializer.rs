@@ -161,6 +161,45 @@ impl Serializer for Posting {
     }
 }
 
+impl Serializer for PostingAmount {
+    fn write<W>(&self, writer: &mut W, settings: &SerializerSettings) -> Result<(), io::Error>
+    where
+        W: io::Write,
+    {
+        self.amount.write(writer, settings)?;
+
+        if let Some(ref lot_price) = self.lot_price {
+            match lot_price {
+                Price::Unit(amount) => {
+                    write!(writer, " {{")?;
+                    amount.write(writer, settings)?;
+                    write!(writer, "}}")?;
+                }
+                Price::Total(amount) => {
+                    write!(writer, " {{{{")?;
+                    amount.write(writer, settings)?;
+                    write!(writer, "}}}}")?;
+                }
+            }
+        }
+
+        if let Some(ref lot_price) = self.price {
+            match lot_price {
+                Price::Unit(amount) => {
+                    write!(writer, " @ ")?;
+                    amount.write(writer, settings)?;
+                }
+                Price::Total(amount) => {
+                    write!(writer, " @@ ")?;
+                    amount.write(writer, settings)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
 impl Serializer for Amount {
     fn write<W>(&self, writer: &mut W, _settings: &SerializerSettings) -> Result<(), io::Error>
     where

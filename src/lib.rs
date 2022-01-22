@@ -14,13 +14,15 @@
 //!   DATE[=EDATE] [*|!] [(CODE)] DESC  [; NOTE]
 //!   ```
 //!
-//! - Transaction postings with format (minimum two spaces or one tab between ``ACCOUNT`` and ``AMOUNT``):
+//! - Transaction postings with format (minimum two spaces or one tab between `ACCOUNT` and `AMOUNT`):
 //!
 //!   ```ledger-cli,ignore
 //!     ACCOUNT  [AMOUNT] [= BALANCE] [; NOTE]
 //!   ```
 //!
 //!     - Virtual accounts are supported
+//!
+//! - `AMOUNT` can be combined with lot and commodity prices ({}, {{}}, @, @@)
 //!
 //! - Commodity prices with format:
 //!

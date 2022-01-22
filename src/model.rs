@@ -89,17 +89,10 @@ impl fmt::Display for TransactionStatus {
 pub struct Posting {
     pub account: String,
     pub reality: Reality,
-    pub amount: Option<Amount>,
+    pub amount: Option<PostingAmount>,
     pub balance: Option<Balance>,
     pub status: Option<TransactionStatus>,
     pub comment: Option<String>,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum Reality {
-    Real,
-    BalancedVirtual,
-    UnbalancedVirtual,
 }
 
 impl fmt::Display for Posting {
@@ -113,7 +106,32 @@ impl fmt::Display for Posting {
     }
 }
 
-#[derive(PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum Reality {
+    Real,
+    BalancedVirtual,
+    UnbalancedVirtual,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct PostingAmount {
+    pub amount: Amount,
+    pub lot_price: Option<Price>,
+    pub price: Option<Price>,
+}
+
+impl fmt::Display for PostingAmount {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            self.to_string_pretty(&SerializerSettings::default())
+        )?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Amount {
     pub quantity: Decimal,
     pub commodity: Commodity,
@@ -130,12 +148,6 @@ impl fmt::Display for Amount {
     }
 }
 
-impl fmt::Debug for Amount {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        fmt::Display::fmt(self, f)
-    }
-}
-
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Commodity {
     pub name: String,
@@ -146,6 +158,12 @@ pub struct Commodity {
 pub enum CommodityPosition {
     Left,
     Right,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum Price {
+    Unit(Amount),
+    Total(Amount),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -274,12 +292,16 @@ mod tests {
                 Posting {
                     account: "Assets:Checking".to_owned(),
                     reality: Reality::Real,
-                    amount: Some(Amount {
-                        quantity: Decimal::new(4200, 2),
-                        commodity: Commodity {
-                            name: "USD".to_owned(),
-                            position: CommodityPosition::Left,
-                        }
+                    amount: Some(PostingAmount {
+                        amount: Amount {
+                            quantity: Decimal::new(4200, 2),
+                            commodity: Commodity {
+                                name: "USD".to_owned(),
+                                position: CommodityPosition::Left,
+                            }
+                        },
+                        lot_price: None,
+                        price: None,
                     }),
                     balance: Some(Balance::Amount(Amount {
                         quantity: Decimal::new(5000, 2),
@@ -311,12 +333,16 @@ mod tests {
                     Posting {
                         account: "TEST:ABC 123".to_owned(),
                         reality: Reality::Real,
-                        amount: Some(Amount {
-                            quantity: Decimal::new(120, 2),
-                            commodity: Commodity {
-                                name: "$".to_owned(),
-                                position: CommodityPosition::Left
-                            }
+                        amount: Some(PostingAmount {
+                            amount: Amount {
+                                quantity: Decimal::new(120, 2),
+                                commodity: Commodity {
+                                    name: "$".to_owned(),
+                                    position: CommodityPosition::Left
+                                }
+                            },
+                            lot_price: None,
+                            price: None
                         }),
                         balance: None,
                         status: None,
@@ -325,12 +351,16 @@ mod tests {
                     Posting {
                         account: "TEST:ABC 123".to_owned(),
                         reality: Reality::Real,
-                        amount: Some(Amount {
-                            quantity: Decimal::new(120, 2),
-                            commodity: Commodity {
-                                name: "$".to_owned(),
-                                position: CommodityPosition::Left
-                            }
+                        amount: Some(PostingAmount {
+                            amount: Amount {
+                                quantity: Decimal::new(120, 2),
+                                commodity: Commodity {
+                                    name: "$".to_owned(),
+                                    position: CommodityPosition::Left
+                                }
+                            },
+                            lot_price: None,
+                            price: None
                         }),
                         balance: None,
                         status: None,
@@ -365,12 +395,16 @@ mod tests {
                             Posting {
                                 account: "TEST:ABC 123".to_owned(),
                                 reality: Reality::Real,
-                                amount: Some(Amount {
-                                    quantity: Decimal::new(120, 2),
-                                    commodity: Commodity {
-                                        name: "$".to_owned(),
-                                        position: CommodityPosition::Left
-                                    }
+                                amount: Some(PostingAmount {
+                                    amount: Amount {
+                                        quantity: Decimal::new(120, 2),
+                                        commodity: Commodity {
+                                            name: "$".to_owned(),
+                                            position: CommodityPosition::Left
+                                        }
+                                    },
+                                    lot_price: None,
+                                    price: None
                                 }),
                                 balance: None,
                                 status: None,
@@ -379,12 +413,16 @@ mod tests {
                             Posting {
                                 account: "TEST:ABC 123".to_owned(),
                                 reality: Reality::Real,
-                                amount: Some(Amount {
-                                    quantity: Decimal::new(120, 2),
-                                    commodity: Commodity {
-                                        name: "$".to_owned(),
-                                        position: CommodityPosition::Left
-                                    }
+                                amount: Some(PostingAmount {
+                                    amount: Amount {
+                                        quantity: Decimal::new(120, 2),
+                                        commodity: Commodity {
+                                            name: "$".to_owned(),
+                                            position: CommodityPosition::Left
+                                        }
+                                    },
+                                    lot_price: None,
+                                    price: None
                                 }),
                                 balance: None,
                                 status: None,
@@ -404,12 +442,28 @@ mod tests {
                             Posting {
                                 account: "TEST:ABC 123".to_owned(),
                                 reality: Reality::Real,
-                                amount: Some(Amount {
-                                    quantity: Decimal::new(120, 2),
-                                    commodity: Commodity {
-                                        name: "$".to_owned(),
-                                        position: CommodityPosition::Left
-                                    }
+                                amount: Some(PostingAmount {
+                                    amount: Amount {
+                                        quantity: Decimal::new(120, 2),
+                                        commodity: Commodity {
+                                            name: "$".to_owned(),
+                                            position: CommodityPosition::Left
+                                        }
+                                    },
+                                    lot_price: Some(Price::Unit(Amount {
+                                        quantity: Decimal::new(500, 2),
+                                        commodity: Commodity {
+                                            name: "PLN".to_owned(),
+                                            position: CommodityPosition::Right
+                                        }
+                                    })),
+                                    price: Some(Price::Unit(Amount {
+                                        quantity: Decimal::new(600, 2),
+                                        commodity: Commodity {
+                                            name: "PLN".to_owned(),
+                                            position: CommodityPosition::Right
+                                        }
+                                    }))
                                 }),
                                 balance: None,
                                 status: None,
@@ -418,12 +472,28 @@ mod tests {
                             Posting {
                                 account: "TEST:ABC 123".to_owned(),
                                 reality: Reality::Real,
-                                amount: Some(Amount {
-                                    quantity: Decimal::new(120, 2),
-                                    commodity: Commodity {
-                                        name: "$".to_owned(),
-                                        position: CommodityPosition::Left
-                                    }
+                                amount: Some(PostingAmount {
+                                    amount: Amount {
+                                        quantity: Decimal::new(120, 2),
+                                        commodity: Commodity {
+                                            name: "$".to_owned(),
+                                            position: CommodityPosition::Left
+                                        }
+                                    },
+                                    lot_price: Some(Price::Total(Amount {
+                                        quantity: Decimal::new(500, 2),
+                                        commodity: Commodity {
+                                            name: "PLN".to_owned(),
+                                            position: CommodityPosition::Right
+                                        }
+                                    })),
+                                    price: Some(Price::Total(Amount {
+                                        quantity: Decimal::new(600, 2),
+                                        commodity: Commodity {
+                                            name: "PLN".to_owned(),
+                                            position: CommodityPosition::Right
+                                        }
+                                    }))
                                 }),
                                 balance: None,
                                 status: None,
@@ -454,8 +524,8 @@ mod tests {
   TEST:ABC 123  $1.20
 
 2018-10-01=2018-10-14 ! (123) Marek Ogarek
-  TEST:ABC 123  $1.20
-  TEST:ABC 123  $1.20
+  TEST:ABC 123  $1.20 {5.00 PLN} @ 6.00 PLN
+  TEST:ABC 123  $1.20 {{5.00 PLN}} @@ 6.00 PLN
 
 P 2017-11-12 12:00:00 mBH 5.00 PLN
 "#;

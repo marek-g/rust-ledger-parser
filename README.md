@@ -29,6 +29,8 @@ Supported elements:
   ```
 
   - Virtual accounts are supported
+  
+- `AMOUNT` can be combined with lot and commodity prices ({}, {{}}, @, @@)
 
 - Commodity prices with format:
 
