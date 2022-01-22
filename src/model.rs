@@ -210,7 +210,7 @@ mod tests {
                 Amount {
                     quantity: Decimal::new(4200, 2),
                     commodity: Commodity {
-                        name: "€".to_string(),
+                        name: "€".to_owned(),
                         position: CommodityPosition::Right,
                     }
                 }
@@ -223,7 +223,7 @@ mod tests {
                 Amount {
                     quantity: Decimal::new(4200, 2),
                     commodity: Commodity {
-                        name: "USD".to_string(),
+                        name: "USD".to_owned(),
                         position: CommodityPosition::Left,
                     }
                 }
@@ -238,11 +238,11 @@ mod tests {
             "{}",
             CommodityPrice {
                 datetime: NaiveDate::from_ymd(2017, 11, 12).and_hms(12, 00, 00),
-                commodity_name: "mBH".to_string(),
+                commodity_name: "mBH".to_owned(),
                 amount: Amount {
                     quantity: Decimal::new(500, 2),
                     commodity: Commodity {
-                        name: "PLN".to_string(),
+                        name: "PLN".to_owned(),
                         position: CommodityPosition::Right
                     }
                 }
@@ -260,7 +260,7 @@ mod tests {
                 Balance::Amount(Amount {
                     quantity: Decimal::new(4200, 2),
                     commodity: Commodity {
-                        name: "€".to_string(),
+                        name: "€".to_owned(),
                         position: CommodityPosition::Right,
                     }
                 })
@@ -276,23 +276,23 @@ mod tests {
             format!(
                 "{}",
                 Posting {
-                    account: Account::Real("Assets:Checking".to_string()),
+                    account: Account::Real("Assets:Checking".to_owned()),
                     amount: Some(Amount {
                         quantity: Decimal::new(4200, 2),
                         commodity: Commodity {
-                            name: "USD".to_string(),
+                            name: "USD".to_owned(),
                             position: CommodityPosition::Left,
                         }
                     }),
                     balance: Some(Balance::Amount(Amount {
                         quantity: Decimal::new(5000, 2),
                         commodity: Commodity {
-                            name: "USD".to_string(),
+                            name: "USD".to_owned(),
                             position: CommodityPosition::Left,
                         }
                     })),
                     status: Some(TransactionStatus::Cleared),
-                    comment: Some("asdf".to_string()),
+                    comment: Some("asdf".to_owned()),
                 }
             ),
             "* Assets:Checking  USD42.00 = USD50.00\n  ; asdf"
@@ -304,32 +304,32 @@ mod tests {
         let actual = format!(
             "{}",
             Transaction {
-                comment: Some("Comment Line 1\nComment Line 2".to_string()),
+                comment: Some("Comment Line 1\nComment Line 2".to_owned()),
                 date: NaiveDate::from_ymd(2018, 10, 01),
                 effective_date: Some(NaiveDate::from_ymd(2018, 10, 14)),
                 status: Some(TransactionStatus::Pending),
-                code: Some("123".to_string()),
-                description: "Marek Ogarek".to_string(),
+                code: Some("123".to_owned()),
+                description: "Marek Ogarek".to_owned(),
                 postings: vec![
                     Posting {
-                        account: Account::Real("TEST:ABC 123".to_string()),
+                        account: Account::Real("TEST:ABC 123".to_owned()),
                         amount: Some(Amount {
                             quantity: Decimal::new(120, 2),
                             commodity: Commodity {
-                                name: "$".to_string(),
+                                name: "$".to_owned(),
                                 position: CommodityPosition::Left
                             }
                         }),
                         balance: None,
                         status: None,
-                        comment: Some("dd".to_string())
+                        comment: Some("dd".to_owned())
                     },
                     Posting {
-                        account: Account::Real("TEST:ABC 123".to_string()),
+                        account: Account::Real("TEST:ABC 123".to_owned()),
                         amount: Some(Amount {
                             quantity: Decimal::new(120, 2),
                             commodity: Commodity {
-                                name: "$".to_string(),
+                                name: "$".to_owned(),
                                 position: CommodityPosition::Left
                             }
                         }),
@@ -356,32 +356,32 @@ mod tests {
             Ledger {
                 items: vec![
                     LedgerItem::Transaction(Transaction {
-                        comment: Some("Comment Line 1\nComment Line 2".to_string()),
+                        comment: Some("Comment Line 1\nComment Line 2".to_owned()),
                         date: NaiveDate::from_ymd(2018, 10, 01),
                         effective_date: Some(NaiveDate::from_ymd(2018, 10, 14)),
                         status: Some(TransactionStatus::Pending),
-                        code: Some("123".to_string()),
-                        description: "Marek Ogarek".to_string(),
+                        code: Some("123".to_owned()),
+                        description: "Marek Ogarek".to_owned(),
                         postings: vec![
                             Posting {
-                                account: Account::Real("TEST:ABC 123".to_string()),
+                                account: Account::Real("TEST:ABC 123".to_owned()),
                                 amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
-                                        name: "$".to_string(),
+                                        name: "$".to_owned(),
                                         position: CommodityPosition::Left
                                     }
                                 }),
                                 balance: None,
                                 status: None,
-                                comment: Some("dd".to_string())
+                                comment: Some("dd".to_owned())
                             },
                             Posting {
-                                account: Account::Real("TEST:ABC 123".to_string()),
+                                account: Account::Real("TEST:ABC 123".to_owned()),
                                 amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
-                                        name: "$".to_string(),
+                                        name: "$".to_owned(),
                                         position: CommodityPosition::Left
                                     }
                                 }),
@@ -397,15 +397,15 @@ mod tests {
                         date: NaiveDate::from_ymd(2018, 10, 01),
                         effective_date: Some(NaiveDate::from_ymd(2018, 10, 14)),
                         status: Some(TransactionStatus::Pending),
-                        code: Some("123".to_string()),
-                        description: "Marek Ogarek".to_string(),
+                        code: Some("123".to_owned()),
+                        description: "Marek Ogarek".to_owned(),
                         postings: vec![
                             Posting {
-                                account: Account::Real("TEST:ABC 123".to_string()),
+                                account: Account::Real("TEST:ABC 123".to_owned()),
                                 amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
-                                        name: "$".to_string(),
+                                        name: "$".to_owned(),
                                         position: CommodityPosition::Left
                                     }
                                 }),
@@ -414,11 +414,11 @@ mod tests {
                                 comment: None
                             },
                             Posting {
-                                account: Account::Real("TEST:ABC 123".to_string()),
+                                account: Account::Real("TEST:ABC 123".to_owned()),
                                 amount: Some(Amount {
                                     quantity: Decimal::new(120, 2),
                                     commodity: Commodity {
-                                        name: "$".to_string(),
+                                        name: "$".to_owned(),
                                         position: CommodityPosition::Left
                                     }
                                 }),
@@ -431,11 +431,11 @@ mod tests {
                     LedgerItem::EmptyLine,
                     LedgerItem::CommodityPrice(CommodityPrice {
                         datetime: NaiveDate::from_ymd(2017, 11, 12).and_hms(12, 00, 00),
-                        commodity_name: "mBH".to_string(),
+                        commodity_name: "mBH".to_owned(),
                         amount: Amount {
                             quantity: Decimal::new(500, 2),
                             commodity: Commodity {
-                                name: "PLN".to_string(),
+                                name: "PLN".to_owned(),
                                 position: CommodityPosition::Right
                             }
                         }

@@ -9,12 +9,12 @@ pub struct SerializerSettings {
 
 impl SerializerSettings {
     pub fn with_indent(mut self, indent: &str) -> Self {
-        self.indent = indent.to_string();
+        self.indent = indent.to_owned();
         self
     }
 
     pub fn with_eol(mut self, eol: &str) -> Self {
-        self.eol = eol.to_string();
+        self.eol = eol.to_owned();
         self
     }
 }
@@ -22,8 +22,8 @@ impl SerializerSettings {
 impl Default for SerializerSettings {
     fn default() -> Self {
         Self {
-            indent: "  ".to_string(),
-            eol: "\n".to_string(),
+            indent: "  ".to_owned(),
+            eol: "\n".to_owned(),
         }
     }
 }
@@ -36,7 +36,7 @@ pub trait Serializer {
     fn to_string_pretty(&self, settings: &SerializerSettings) -> String {
         let mut res = Vec::new();
         self.write(&mut res, settings).unwrap();
-        return std::str::from_utf8(&res).unwrap().to_string();
+        return std::str::from_utf8(&res).unwrap().to_owned();
     }
 }
 

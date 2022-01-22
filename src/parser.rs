@@ -450,7 +450,7 @@ mod tests {
                 Amount {
                     quantity: Decimal::new(120, 2),
                     commodity: Commodity {
-                        name: "$".to_string(),
+                        name: "$".to_owned(),
                         position: CommodityPosition::Left
                     }
                 }
@@ -463,7 +463,7 @@ mod tests {
                 Amount {
                     quantity: Decimal::new(-120, 2),
                     commodity: Commodity {
-                        name: "$".to_string(),
+                        name: "$".to_owned(),
                         position: CommodityPosition::Left
                     }
                 }
@@ -476,7 +476,7 @@ mod tests {
                 Amount {
                     quantity: Decimal::new(-120, 2),
                     commodity: Commodity {
-                        name: "$".to_string(),
+                        name: "$".to_owned(),
                         position: CommodityPosition::Left
                     }
                 }
@@ -489,7 +489,7 @@ mod tests {
                 Amount {
                     quantity: Decimal::new(-120, 2),
                     commodity: Commodity {
-                        name: "$".to_string(),
+                        name: "$".to_owned(),
                         position: CommodityPosition::Left
                     }
                 }
@@ -502,7 +502,7 @@ mod tests {
                 Amount {
                     quantity: Decimal::new(120, 2),
                     commodity: Commodity {
-                        name: "USD".to_string(),
+                        name: "USD".to_owned(),
                         position: CommodityPosition::Right
                     }
                 }
@@ -515,7 +515,7 @@ mod tests {
                 Amount {
                     quantity: Decimal::new(-120, 2),
                     commodity: Commodity {
-                        name: "USD".to_string(),
+                        name: "USD".to_owned(),
                         position: CommodityPosition::Right
                     }
                 }
@@ -532,7 +532,7 @@ mod tests {
                 Balance::Amount(Amount {
                     quantity: Decimal::new(120, 2),
                     commodity: Commodity {
-                        name: "$".to_string(),
+                        name: "$".to_owned(),
                         position: CommodityPosition::Left
                     }
                 })
@@ -545,7 +545,7 @@ mod tests {
                 Balance::Amount(Amount {
                     quantity: Decimal::new(0, 0),
                     commodity: Commodity {
-                        name: "PLN".to_string(),
+                        name: "PLN".to_owned(),
                         position: CommodityPosition::Right
                     }
                 })
@@ -562,11 +562,11 @@ mod tests {
                 "",
                 CommodityPrice {
                     datetime: NaiveDate::from_ymd(2017, 11, 12).and_hms(12, 00, 00),
-                    commodity_name: "mBH".to_string(),
+                    commodity_name: "mBH".to_owned(),
                     amount: Amount {
                         quantity: Decimal::new(500, 2),
                         commodity: Commodity {
-                            name: "PLN".to_string(),
+                            name: "PLN".to_owned(),
                             position: CommodityPosition::Right
                         }
                     }
@@ -618,11 +618,11 @@ mod tests {
             Ok((
                 "",
                 Posting {
-                    account: Account::Real("TEST:ABC 123".to_string()),
+                    account: Account::Real("TEST:ABC 123".to_owned()),
                     amount: Some(Amount {
                         quantity: Decimal::new(120, 2),
                         commodity: Commodity {
-                            name: "$".to_string(),
+                            name: "$".to_owned(),
                             position: CommodityPosition::Left
                         }
                     }),
@@ -637,17 +637,17 @@ mod tests {
             Ok((
                 "",
                 Posting {
-                    account: Account::Real("TEST:ABC 123".to_string()),
+                    account: Account::Real("TEST:ABC 123".to_owned()),
                     amount: Some(Amount {
                         quantity: Decimal::new(120, 2),
                         commodity: Commodity {
-                            name: "$".to_string(),
+                            name: "$".to_owned(),
                             position: CommodityPosition::Left
                         }
                     }),
                     balance: None,
                     status: Some(TransactionStatus::Pending),
-                    comment: Some("test\ncomment line 2".to_string())
+                    comment: Some("test\ncomment line 2".to_owned())
                 }
             ))
         );
@@ -656,11 +656,11 @@ mod tests {
             Ok((
                 "",
                 Posting {
-                    account: Account::Real("TEST:ABC 123;test".to_string()),
+                    account: Account::Real("TEST:ABC 123;test".to_owned()),
                     amount: None,
                     balance: None,
                     status: Some(TransactionStatus::Pending),
-                    comment: Some("comment".to_string())
+                    comment: Some("comment".to_owned())
                 }
             ))
         );
@@ -669,11 +669,11 @@ mod tests {
             Ok((
                 "",
                 Posting {
-                    account: Account::Real("TEST:ABC 123".to_string()),
+                    account: Account::Real("TEST:ABC 123".to_owned()),
                     amount: None,
                     balance: None,
                     status: Some(TransactionStatus::Pending),
-                    comment: Some("test\ncomment line 2".to_string())
+                    comment: Some("test\ncomment line 2".to_owned())
                 }
             ))
         );
@@ -682,11 +682,11 @@ mod tests {
             Ok((
                 "",
                 Posting {
-                    account: Account::Real("TEST:ABC 123".to_string()),
+                    account: Account::Real("TEST:ABC 123".to_owned()),
                     amount: None,
                     balance: None,
                     status: Some(TransactionStatus::Pending),
-                    comment: Some("test\ncomment line 2".to_string())
+                    comment: Some("test\ncomment line 2".to_owned())
                 }
             ))
         );
@@ -695,23 +695,23 @@ mod tests {
             Ok((
                 "",
                 Posting {
-                    account: Account::Real("TEST:ABC 123".to_string()),
+                    account: Account::Real("TEST:ABC 123".to_owned()),
                     amount: Some(Amount {
                         quantity: Decimal::new(120, 2),
                         commodity: Commodity {
-                            name: "$".to_string(),
+                            name: "$".to_owned(),
                             position: CommodityPosition::Left
                         }
                     }),
                     balance: Some(Balance::Amount(Amount {
                         quantity: Decimal::new(240, 2),
                         commodity: Commodity {
-                            name: "$".to_string(),
+                            name: "$".to_owned(),
                             position: CommodityPosition::Left
                         }
                     })),
                     status: None,
-                    comment: Some("comment".to_string())
+                    comment: Some("comment".to_owned())
                 }
             ))
         );
@@ -720,7 +720,7 @@ mod tests {
             Ok((
                 "",
                 Posting {
-                    account: Account::Real("TEST:ABC 123".to_string()),
+                    account: Account::Real("TEST:ABC 123".to_owned()),
                     amount: None,
                     balance: None,
                     status: None,
@@ -733,11 +733,11 @@ mod tests {
             Ok((
                 "",
                 Posting {
-                    account: Account::Real("TEST:ABC 123".to_string()),
+                    account: Account::Real("TEST:ABC 123".to_owned()),
                     amount: None,
                     balance: None,
                     status: None,
-                    comment: Some("456".to_string()),
+                    comment: Some("456".to_owned()),
                 }
             ))
         );
@@ -755,32 +755,32 @@ mod tests {
             Ok((
                 "",
                 Transaction {
-                    comment: Some("Transaction comment".to_string()),
+                    comment: Some("Transaction comment".to_owned()),
                     date: NaiveDate::from_ymd(2018, 10, 1),
                     effective_date: Some(NaiveDate::from_ymd(2018, 10, 14)),
                     status: Some(TransactionStatus::Pending),
-                    code: Some("123".to_string()),
-                    description: "Marek Ogarek".to_string(),
+                    code: Some("123".to_owned()),
+                    description: "Marek Ogarek".to_owned(),
                     postings: vec![
                         Posting {
-                            account: Account::Real("TEST:ABC 123".to_string()),
+                            account: Account::Real("TEST:ABC 123".to_owned()),
                             amount: Some(Amount {
                                 quantity: Decimal::new(120, 2),
                                 commodity: Commodity {
-                                    name: "$".to_string(),
+                                    name: "$".to_owned(),
                                     position: CommodityPosition::Left
                                 }
                             }),
                             balance: None,
                             status: None,
-                            comment: Some("Posting comment\nover two lines".to_string()),
+                            comment: Some("Posting comment\nover two lines".to_owned()),
                         },
                         Posting {
-                            account: Account::Real("TEST:ABC 123".to_string()),
+                            account: Account::Real("TEST:ABC 123".to_owned()),
                             amount: Some(Amount {
                                 quantity: Decimal::new(120, 2),
                                 commodity: Commodity {
-                                    name: "$".to_string(),
+                                    name: "$".to_owned(),
                                     position: CommodityPosition::Left
                                 }
                             }),
@@ -808,28 +808,28 @@ mod tests {
                     effective_date: Some(NaiveDate::from_ymd(2018, 10, 14)),
                     status: None,
                     code: None,
-                    description: "Marek Ogarek ; one space".to_string(),
+                    description: "Marek Ogarek ; one space".to_owned(),
                     postings: vec![
                         Posting {
-                            account: Account::Real("TEST:ABC 123".to_string()),
+                            account: Account::Real("TEST:ABC 123".to_owned()),
                             amount: Some(Amount {
                                 quantity: Decimal::new(120, 2),
                                 commodity: Commodity {
-                                    name: "$".to_string(),
+                                    name: "$".to_owned(),
                                     position: CommodityPosition::Left
                                 }
                             }),
                             balance: None,
                             status: None,
-                            comment: Some("test".to_string()),
+                            comment: Some("test".to_owned()),
                         },
                         Posting {
                             balance: None,
-                            account: Account::Real("TEST:DEF 123".to_string()),
+                            account: Account::Real("TEST:DEF 123".to_owned()),
                             amount: Some(Amount {
                                 quantity: Decimal::new(-120, 2),
                                 commodity: Commodity {
-                                    name: "EUR".to_string(),
+                                    name: "EUR".to_owned(),
                                     position: CommodityPosition::Left
                                 }
                             }),
@@ -837,18 +837,18 @@ mod tests {
                             comment: None,
                         },
                         Posting {
-                            account: Account::Real("TEST:GHI 123".to_string()),
+                            account: Account::Real("TEST:GHI 123".to_owned()),
                             amount: None,
                             balance: None,
                             status: None,
                             comment: None,
                         },
                         Posting {
-                            account: Account::Real("TEST:JKL 123".to_string()),
+                            account: Account::Real("TEST:JKL 123".to_owned()),
                             amount: Some(Amount {
                                 quantity: Decimal::new(-200, 2),
                                 commodity: Commodity {
-                                    name: "EUR".to_string(),
+                                    name: "EUR".to_owned(),
                                     position: CommodityPosition::Left
                                 }
                             }),
@@ -873,24 +873,24 @@ mod tests {
                     date: NaiveDate::from_ymd(2018, 10, 1),
                     effective_date: Some(NaiveDate::from_ymd(2018, 10, 14)),
                     status: Some(TransactionStatus::Pending),
-                    code: Some("123".to_string()),
-                    description: "Marek Ogarek  two spaces".to_string(),
+                    code: Some("123".to_owned()),
+                    description: "Marek Ogarek  two spaces".to_owned(),
                     postings: vec![
                         Posting {
-                            account: Account::Real("TEST:ABC 123".to_string()),
+                            account: Account::Real("TEST:ABC 123".to_owned()),
                             amount: Some(Amount {
                                 quantity: Decimal::new(120, 2),
                                 commodity: Commodity {
-                                    name: "$".to_string(),
+                                    name: "$".to_owned(),
                                     position: CommodityPosition::Left
                                 }
                             }),
                             balance: None,
                             status: None,
-                            comment: Some("test".to_string()),
+                            comment: Some("test".to_owned()),
                         },
                         Posting {
-                            account: Account::Real("TEST:DEF 123".to_string()),
+                            account: Account::Real("TEST:DEF 123".to_owned()),
                             amount: None,
                             balance: None,
                             status: None,
