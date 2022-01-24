@@ -1,5 +1,9 @@
 # Changelog
 
+## [5.1.0] - 2022-01-23
+
+- Make SerializerSettings fields public
+
 ## [5.0.0] - 2022-01-22
 
 - Implement posting commodity and lot prices

@@ -3,8 +3,8 @@ use std::io;
 
 #[non_exhaustive]
 pub struct SerializerSettings {
-    indent: String,
-    eol: String,
+    pub indent: String,
+    pub eol: String,
 }
 
 impl SerializerSettings {
