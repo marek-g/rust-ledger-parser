@@ -141,8 +141,11 @@ impl Serializer for Posting {
             Reality::UnbalancedVirtual => write!(writer, "({})", self.account)?,
         }
 
-        if let Some(ref amount) = self.amount {
+        if self.amount.is_some() || self.balance.is_some() {
             write!(writer, "{}", settings.indent)?;
+        }
+
+        if let Some(ref amount) = self.amount {
             amount.write(writer, settings)?;
         }
 
