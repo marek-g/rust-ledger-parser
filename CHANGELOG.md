@@ -1,5 +1,9 @@
 # Changelog
 
+## [5.1.1] - 2022-04-21
+
+- Fix no indent if only balance (thanks to Cory Forsstrom)
+
 ## [5.1.0] - 2022-01-23
 
 - Make SerializerSettings fields public
