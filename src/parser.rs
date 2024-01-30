@@ -45,16 +45,16 @@ fn number_n<'a>(n: usize) -> impl FnMut(&'a str) -> IResult<&'a str, i32, Verbos
 
 fn parse_date_internal(input: &str) -> LedgerParseResult<(i32, i32, i32)> {
     tuple((
-        terminated(number_n(4), alt((tag("-"), tag("/"), tag(".")))),
-        terminated(number_n(2), alt((tag("-"), tag("/"), tag(".")))),
+        terminated(number_n(4), alt((char('-'), char('/'), char('.')))),
+        terminated(number_n(2), alt((char('-'), char('/'), char('.')))),
         number_n(2),
     ))(input)
 }
 
 fn parse_time_internal(input: &str) -> LedgerParseResult<(i32, i32, i32)> {
     tuple((
-        terminated(number_n(2), tag(":")),
-        terminated(number_n(2), tag(":")),
+        terminated(number_n(2), char(':')),
+        terminated(number_n(2), char(':')),
         number_n(2),
     ))(input)
 }
@@ -89,14 +89,14 @@ fn parse_quantity(input: &str) -> LedgerParseResult<Decimal> {
                 pair(
                     take_while_m_n(1, 3, AsChar::is_dec_digit),
                     many1(preceded(
-                        tag(","),
+                        char(','),
                         take_while_m_n(3, 3, AsChar::is_dec_digit).map(str::to_owned),
                     )),
                 )
                 .map(|(leading, rest)| format!("{}{}", leading, rest.join(""))),
                 digit0.map(str::to_owned),
             )),
-            opt(recognize(preceded(tag("."), digit1))),
+            opt(recognize(preceded(char('.'), digit1))),
         ))
         .map(|(sign, decimal, fractional)| {
             format!(
@@ -139,7 +139,7 @@ fn parse_commodity(input: &str) -> LedgerParseResult<String> {
 fn parse_amount(input: &str) -> LedgerParseResult<Amount> {
     alt((
         tuple((
-            opt(terminated(tag("-"), space0)),
+            opt(terminated(char('-'), space0)),
             terminated(parse_commodity, space0),
             parse_quantity,
         ))
@@ -186,26 +186,31 @@ fn parse_lot_price(input: &str) -> LedgerParseResult<Price> {
             pair(space0, tag("}}")),
         )
         .map(Price::Total),
-        delimited(pair(tag("{"), space0), parse_amount, pair(space0, tag("}"))).map(Price::Unit),
+        delimited(
+            pair(char('{'), space0),
+            parse_amount,
+            pair(space0, char('}')),
+        )
+        .map(Price::Unit),
     ))(input)
 }
 
 fn parse_price(input: &str) -> LedgerParseResult<Price> {
     alt((
         preceded(pair(tag("@@"), space0), parse_amount).map(Price::Total),
-        preceded(pair(tag("@"), space0), parse_amount).map(Price::Unit),
+        preceded(pair(char('@'), space0), parse_amount).map(Price::Unit),
     ))(input)
 }
 
 fn parse_balance(input: &str) -> LedgerParseResult<Balance> {
     alt((
         parse_amount.map(Balance::Amount),
-        value(Balance::Zero, tag("0")),
+        value(Balance::Zero, char('0')),
     ))(input)
 }
 
 fn parse_commodity_price(input: &str) -> LedgerParseResult<CommodityPrice> {
-    let (input, _) = tag("P")(input)?;
+    let (input, _) = char('P')(input)?;
     let (input, datetime) = preceded(space1, parse_datetime)(input)?;
     let (input, commodity_name) = preceded(space1, parse_commodity)(input)?;
     let (input, amount) = preceded(space1, parse_amount)(input)?;
@@ -238,7 +243,7 @@ fn parse_line_comment(input: &str) -> LedgerParseResult<&str> {
 }
 
 fn parse_inline_comment(input: &str) -> LedgerParseResult<&str> {
-    let (input, _) = terminated(tag(";"), space0)(input)?;
+    let (input, _) = terminated(char(';'), space0)(input)?;
     terminated(not_line_ending.map(str::trim_end), eol_or_eof)(input)
 }
 
@@ -316,8 +321,10 @@ fn parse_posting(input: &str) -> LedgerParseResult<Posting> {
     let (input, _) = space0(input)?;
     let (input, (account, reality)) = parse_account(input)?;
     let (input, amount) = opt(preceded(space0, parse_posting_amount))(input)?;
-    let (input, balance) =
-        opt(preceded(delimited(space0, tag("="), space0), parse_balance))(input)?;
+    let (input, balance) = opt(preceded(
+        delimited(space0, char('='), space0),
+        parse_balance,
+    ))(input)?;
     let (input, _) = space0(input)?;
     let (input, inline_comment) =
         alt((parse_inline_comment.map(Some), value(None, eol_or_eof)))(input)?;
@@ -338,14 +345,14 @@ fn parse_posting(input: &str) -> LedgerParseResult<Posting> {
 
 fn parse_payee(input: &str) -> LedgerParseResult<&str> {
     alt((
-        terminated(take_until_hard_separator, peek(pair(space1, tag(";")))),
+        terminated(take_until_hard_separator, peek(pair(space1, char(';')))),
         not_line_ending,
     ))(input)
 }
 
 fn parse_transaction(input: &str) -> LedgerParseResult<Transaction> {
     let (input, date) = parse_date(input)?;
-    let (input, effective_date) = opt(preceded(tag("="), parse_date))(input)?;
+    let (input, effective_date) = opt(preceded(char('='), parse_date))(input)?;
     let (input, status) = opt(preceded(space1, parse_transaction_status))(input)?;
     let (input, code) = opt(preceded(
         space1,
