@@ -267,7 +267,10 @@ mod tests {
         let actual = format!(
             "{}",
             CommodityPrice {
-                datetime: NaiveDate::from_ymd(2017, 11, 12).and_hms(12, 00, 00),
+                datetime: NaiveDate::from_ymd_opt(2017, 11, 12)
+                    .unwrap()
+                    .and_hms_opt(12, 00, 00)
+                    .unwrap(),
                 commodity_name: "mBH".to_owned(),
                 amount: Amount {
                     quantity: Decimal::new(500, 2),
@@ -340,8 +343,8 @@ mod tests {
             "{}",
             Transaction {
                 comment: Some("Comment Line 1\nComment Line 2".to_owned()),
-                date: NaiveDate::from_ymd(2018, 10, 01),
-                effective_date: Some(NaiveDate::from_ymd(2018, 10, 14)),
+                date: NaiveDate::from_ymd_opt(2018, 10, 01).unwrap(),
+                effective_date: Some(NaiveDate::from_ymd_opt(2018, 10, 14).unwrap()),
                 status: Some(TransactionStatus::Pending),
                 code: Some("123".to_owned()),
                 description: "Marek Ogarek".to_owned(),
@@ -402,8 +405,8 @@ mod tests {
                 items: vec![
                     LedgerItem::Transaction(Transaction {
                         comment: Some("Comment Line 1\nComment Line 2".to_owned()),
-                        date: NaiveDate::from_ymd(2018, 10, 01),
-                        effective_date: Some(NaiveDate::from_ymd(2018, 10, 14)),
+                        date: NaiveDate::from_ymd_opt(2018, 10, 01).unwrap(),
+                        effective_date: Some(NaiveDate::from_ymd_opt(2018, 10, 14).unwrap()),
                         status: Some(TransactionStatus::Pending),
                         code: Some("123".to_owned()),
                         description: "Marek Ogarek".to_owned(),
@@ -449,8 +452,8 @@ mod tests {
                     LedgerItem::EmptyLine,
                     LedgerItem::Transaction(Transaction {
                         comment: None,
-                        date: NaiveDate::from_ymd(2018, 10, 01),
-                        effective_date: Some(NaiveDate::from_ymd(2018, 10, 14)),
+                        date: NaiveDate::from_ymd_opt(2018, 10, 01).unwrap(),
+                        effective_date: Some(NaiveDate::from_ymd_opt(2018, 10, 14).unwrap()),
                         status: Some(TransactionStatus::Pending),
                         code: Some("123".to_owned()),
                         description: "Marek Ogarek".to_owned(),
@@ -519,7 +522,10 @@ mod tests {
                     }),
                     LedgerItem::EmptyLine,
                     LedgerItem::CommodityPrice(CommodityPrice {
-                        datetime: NaiveDate::from_ymd(2017, 11, 12).and_hms(12, 00, 00),
+                        datetime: NaiveDate::from_ymd_opt(2017, 11, 12)
+                            .unwrap()
+                            .and_hms_opt(12, 00, 00)
+                            .unwrap(),
                         commodity_name: "mBH".to_owned(),
                         amount: Amount {
                             quantity: Decimal::new(500, 2),

@@ -405,15 +405,15 @@ mod tests {
     fn parse_date_test() {
         assert_eq!(
             parse_date("2017-03-24"),
-            Ok(("", NaiveDate::from_ymd(2017, 3, 24)))
+            Ok(("", NaiveDate::from_ymd_opt(2017, 3, 24).unwrap()))
         );
         assert_eq!(
             parse_date("2017/03/24"),
-            Ok(("", NaiveDate::from_ymd(2017, 3, 24)))
+            Ok(("", NaiveDate::from_ymd_opt(2017, 3, 24).unwrap()))
         );
         assert_eq!(
             parse_date("2017.03.24"),
-            Ok(("", NaiveDate::from_ymd(2017, 3, 24)))
+            Ok(("", NaiveDate::from_ymd_opt(2017, 3, 24).unwrap()))
         );
         assert_eq!(
             parse_date("2017-13-24"),
@@ -428,7 +428,13 @@ mod tests {
     fn parse_datetime_test() {
         assert_eq!(
             parse_datetime("2017-03-24 17:15:23"),
-            Ok(("", NaiveDate::from_ymd(2017, 3, 24).and_hms(17, 15, 23)))
+            Ok((
+                "",
+                NaiveDate::from_ymd_opt(2017, 3, 24)
+                    .unwrap()
+                    .and_hms_opt(17, 15, 23)
+                    .unwrap()
+            ))
         );
         assert_eq!(
             parse_datetime("2017-13-24 22:11:22"),
@@ -815,7 +821,10 @@ mod tests {
             Ok((
                 "",
                 CommodityPrice {
-                    datetime: NaiveDate::from_ymd(2017, 11, 12).and_hms(12, 00, 00),
+                    datetime: NaiveDate::from_ymd_opt(2017, 11, 12)
+                        .unwrap()
+                        .and_hms_opt(12, 00, 00)
+                        .unwrap(),
                     commodity_name: "mBH".to_owned(),
                     amount: Amount {
                         quantity: Decimal::new(500, 2),
@@ -1030,8 +1039,8 @@ mod tests {
                 "",
                 Transaction {
                     comment: Some("Transaction comment".to_owned()),
-                    date: NaiveDate::from_ymd(2018, 10, 1),
-                    effective_date: Some(NaiveDate::from_ymd(2018, 10, 14)),
+                    date: NaiveDate::from_ymd_opt(2018, 10, 1).unwrap(),
+                    effective_date: Some(NaiveDate::from_ymd_opt(2018, 10, 14).unwrap()),
                     status: Some(TransactionStatus::Pending),
                     code: Some("123".to_owned()),
                     description: "Marek Ogarek".to_owned(),
@@ -1088,8 +1097,8 @@ mod tests {
                 "",
                 Transaction {
                     comment: None,
-                    date: NaiveDate::from_ymd(2018, 10, 1),
-                    effective_date: Some(NaiveDate::from_ymd(2018, 10, 14)),
+                    date: NaiveDate::from_ymd_opt(2018, 10, 1).unwrap(),
+                    effective_date: Some(NaiveDate::from_ymd_opt(2018, 10, 14).unwrap()),
                     status: None,
                     code: None,
                     description: "Marek Ogarek ; one space".to_owned(),
@@ -1170,8 +1179,8 @@ mod tests {
                 "",
                 Transaction {
                     comment: None,
-                    date: NaiveDate::from_ymd(2018, 10, 1),
-                    effective_date: Some(NaiveDate::from_ymd(2018, 10, 14)),
+                    date: NaiveDate::from_ymd_opt(2018, 10, 1).unwrap(),
+                    effective_date: Some(NaiveDate::from_ymd_opt(2018, 10, 14).unwrap()),
                     status: Some(TransactionStatus::Pending),
                     code: Some("123".to_owned()),
                     description: "Marek Ogarek  two spaces".to_owned(),

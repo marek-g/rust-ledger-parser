@@ -41,7 +41,7 @@ mod parser;
 
 use std::fmt;
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ParseError {
     String(String),
 }
