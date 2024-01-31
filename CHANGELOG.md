@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Support for dates and metadata tags in posting comments (thanks to Tim Bates)
 - Add FromStr impl for Ledger struct
 
 ## [5.1.1] - 2022-04-21

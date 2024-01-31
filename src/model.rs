@@ -3,6 +3,7 @@ use crate::serializer::*;
 use crate::ParseError;
 use chrono::{NaiveDate, NaiveDateTime};
 use nom::{error::convert_error, Finish};
+use ordered_float::NotNan;
 use rust_decimal::Decimal;
 use std::fmt;
 use std::str::FromStr;
@@ -64,12 +65,13 @@ impl fmt::Display for LedgerItem {
 ///
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Transaction {
-    pub comment: Option<String>,
-    pub date: NaiveDate,
-    pub effective_date: Option<NaiveDate>,
     pub status: Option<TransactionStatus>,
     pub code: Option<String>,
     pub description: String,
+    pub comment: Option<String>,
+    pub date: NaiveDate,
+    pub effective_date: Option<NaiveDate>,
+    pub posting_metadata: PostingMetadata,
     pub postings: Vec<Posting>,
 }
 
@@ -109,6 +111,7 @@ pub struct Posting {
     pub balance: Option<Balance>,
     pub status: Option<TransactionStatus>,
     pub comment: Option<String>,
+    pub metadata: PostingMetadata,
 }
 
 impl fmt::Display for Posting {
@@ -217,6 +220,41 @@ impl fmt::Display for CommodityPrice {
             self.to_string_pretty(&SerializerSettings::default())
         )?;
         Ok(())
+    }
+}
+
+///
+/// Posting metadata. Also appears on Transaction
+///
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct PostingMetadata {
+    pub date: Option<NaiveDate>,
+    pub effective_date: Option<NaiveDate>,
+    pub tags: Vec<Tag>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Tag {
+    pub name: String,
+    pub value: Option<TagValue>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TagValue {
+    String(String),
+    Integer(i64),
+    Float(NotNan<f64>),
+    Date(NaiveDate),
+}
+
+impl fmt::Display for TagValue {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            TagValue::String(v) => v.fmt(f),
+            TagValue::Integer(v) => v.fmt(f),
+            TagValue::Float(v) => v.fmt(f),
+            TagValue::Date(v) => write!(f, "[{v}]"),
+        }
     }
 }
 
@@ -331,6 +369,11 @@ mod tests {
                     })),
                     status: Some(TransactionStatus::Cleared),
                     comment: Some("asdf".to_owned()),
+                    metadata: PostingMetadata {
+                        date: None,
+                        effective_date: None,
+                        tags: vec![],
+                    },
                 }
             ),
             "* Assets:Checking  USD42.00 = USD50.00\n  ; asdf"
@@ -348,6 +391,11 @@ mod tests {
                 status: Some(TransactionStatus::Pending),
                 code: Some("123".to_owned()),
                 description: "Marek Ogarek".to_owned(),
+                posting_metadata: PostingMetadata {
+                    date: None,
+                    effective_date: None,
+                    tags: vec![],
+                },
                 postings: vec![
                     Posting {
                         account: "TEST:ABC 123".to_owned(),
@@ -365,7 +413,12 @@ mod tests {
                         }),
                         balance: None,
                         status: None,
-                        comment: Some("dd".to_owned())
+                        comment: Some("dd".to_owned()),
+                        metadata: PostingMetadata {
+                            date: None,
+                            effective_date: None,
+                            tags: vec![],
+                        },
                     },
                     Posting {
                         account: "TEST:ABC 123".to_owned(),
@@ -383,7 +436,12 @@ mod tests {
                         }),
                         balance: None,
                         status: None,
-                        comment: None
+                        comment: None,
+                        metadata: PostingMetadata {
+                            date: None,
+                            effective_date: None,
+                            tags: vec![],
+                        },
                     }
                 ]
             },
@@ -410,6 +468,11 @@ mod tests {
                         status: Some(TransactionStatus::Pending),
                         code: Some("123".to_owned()),
                         description: "Marek Ogarek".to_owned(),
+                        posting_metadata: PostingMetadata {
+                            date: None,
+                            effective_date: None,
+                            tags: vec![],
+                        },
                         postings: vec![
                             Posting {
                                 account: "TEST:ABC 123".to_owned(),
@@ -427,7 +490,12 @@ mod tests {
                                 }),
                                 balance: None,
                                 status: None,
-                                comment: Some("dd".to_owned())
+                                comment: Some("dd".to_owned()),
+                                metadata: PostingMetadata {
+                                    date: None,
+                                    effective_date: None,
+                                    tags: vec![],
+                                },
                             },
                             Posting {
                                 account: "TEST:ABC 123".to_owned(),
@@ -445,7 +513,12 @@ mod tests {
                                 }),
                                 balance: None,
                                 status: None,
-                                comment: None
+                                comment: None,
+                                metadata: PostingMetadata {
+                                    date: None,
+                                    effective_date: None,
+                                    tags: vec![],
+                                },
                             }
                         ]
                     }),
@@ -454,6 +527,11 @@ mod tests {
                         comment: None,
                         date: NaiveDate::from_ymd_opt(2018, 10, 01).unwrap(),
                         effective_date: Some(NaiveDate::from_ymd_opt(2018, 10, 14).unwrap()),
+                        posting_metadata: PostingMetadata {
+                            date: None,
+                            effective_date: None,
+                            tags: vec![],
+                        },
                         status: Some(TransactionStatus::Pending),
                         code: Some("123".to_owned()),
                         description: "Marek Ogarek".to_owned(),
@@ -486,7 +564,12 @@ mod tests {
                                 }),
                                 balance: None,
                                 status: None,
-                                comment: None
+                                comment: None,
+                                metadata: PostingMetadata {
+                                    date: None,
+                                    effective_date: None,
+                                    tags: vec![],
+                                },
                             },
                             Posting {
                                 account: "TEST:ABC 123".to_owned(),
@@ -516,7 +599,12 @@ mod tests {
                                 }),
                                 balance: None,
                                 status: None,
-                                comment: None
+                                comment: None,
+                                metadata: PostingMetadata {
+                                    date: None,
+                                    effective_date: None,
+                                    tags: vec![],
+                                },
                             }
                         ]
                     }),

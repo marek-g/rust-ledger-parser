@@ -29,7 +29,18 @@ Supported elements:
   ```
 
   - Virtual accounts are supported
-  
+
+  - Posting comments with dates, effective dates, and metadata tags are supported
+  ```ledger-cli
+    ACCOUNT  [AMOUNT] [= BALANCE]  ; [YYYY-MM-DD]
+    ACCOUNT  [AMOUNT] [= BALANCE]  ; [=YYYY-MM-DD]
+    ACCOUNT  [AMOUNT] [= BALANCE]  ; :TAG1:TAG2:
+    ACCOUNT  [AMOUNT] [= BALANCE]  ; Tag: String Value
+    ACCOUNT  [AMOUNT] [= BALANCE]  ; Tag:: -1
+    ACCOUNT  [AMOUNT] [= BALANCE]  ; Tag:: 1.0
+    ACCOUNT  [AMOUNT] [= BALANCE]  ; Tag:: [YYYY-MM-DD]
+  ```
+
 - `AMOUNT` can be combined with lot and commodity prices ({}, {{}}, @, @@)
 
 - Commodity prices with format:
