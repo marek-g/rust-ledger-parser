@@ -1428,7 +1428,7 @@ mod tests {
             ))
         );
         assert_eq!(
-            parse_posting(" TEST:ABC 123   ; Pi:: 3.14159"),
+            parse_posting(" TEST:ABC 123   ; Pi:: 3.141592653589793"),
             Ok((
                 "",
                 Posting {
@@ -1443,7 +1443,9 @@ mod tests {
                         effective_date: None,
                         tags: vec![Tag {
                             name: "Pi".to_owned(),
-                            value: Some(TagValue::Float(NotNan::new(3.14159).unwrap()))
+                            value: Some(TagValue::Float(
+                                NotNan::new(std::f64::consts::PI).unwrap()
+                            ))
                         }],
                     },
                 }
