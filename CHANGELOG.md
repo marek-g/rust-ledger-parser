@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [6.0.0] - 2024-02-26
 
 - Support for dates and metadata tags in posting comments (thanks to Tim Bates)
 - Add FromStr impl for Ledger struct
