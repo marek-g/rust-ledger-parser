@@ -1,5 +1,10 @@
 # Changelog
 
+## [6.0.0] - 2024-02-26
+
+- Support for dates and metadata tags in posting comments (thanks to Tim Bates)
+- Add FromStr impl for Ledger struct
+
 ## [5.1.1] - 2022-04-21
 
 - Fix no indent if only balance (thanks to Cory Forsstrom)
@@ -17,7 +22,7 @@
 ### Changes
 
 - Rewrite parser to use nom v7 (thanks to Tim Bates)
-- Require hard separator between payee name and transaction inline comment (thanks to Tim Bates) 
+- Require hard separator between payee name and transaction inline comment (thanks to Tim Bates)
 
 ## [4.0.0] - 2022-01-04
 

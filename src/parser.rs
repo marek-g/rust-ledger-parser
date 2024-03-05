@@ -2,13 +2,17 @@ use chrono::{NaiveDate, NaiveDateTime};
 use nom::{
     branch::alt,
     bytes::complete::{is_not, tag, take_while1, take_while_m_n},
-    character::complete::{char, digit0, digit1, line_ending, not_line_ending, space0, space1},
-    combinator::{eof, map_opt, map_res, opt, peek, recognize, value, verify},
+    character::complete::{
+        alphanumeric1, char, digit0, digit1, line_ending, none_of, not_line_ending, space0, space1,
+    },
+    combinator::{eof, map, map_opt, map_res, not, opt, peek, recognize, value, verify},
     error::VerboseError,
-    multi::{fold_many1, many0, many1},
+    multi::{fold_many0, fold_many1, many0, many1, separated_list1},
+    number::complete::double,
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
     AsChar, Err, IResult, Needed, Parser,
 };
+use ordered_float::NotNan;
 use rust_decimal::Decimal;
 use std::str::FromStr;
 
@@ -18,21 +22,6 @@ type LedgerParseResult<'a, T> = IResult<&'a str, T, VerboseError<&'a str>>;
 
 fn is_commodity_char(c: char) -> bool {
     !"0123456789{}[]()~`!@#%^&*-=+\\'\",./? ;\t\r\n".contains(c)
-}
-
-fn join_comments(inline_comment: Option<&str>, line_comments: Vec<&str>) -> Option<String> {
-    if let Some(inline) = inline_comment {
-        let mut full: String = inline.to_owned();
-        if !line_comments.is_empty() {
-            full.push('\n');
-            full.push_str(&line_comments.join("\n"));
-        }
-        Some(full)
-    } else if !line_comments.is_empty() {
-        Some(line_comments.join("\n"))
-    } else {
-        None
-    }
 }
 
 fn eol_or_eof(input: &str) -> LedgerParseResult<&str> {
@@ -45,16 +34,16 @@ fn number_n<'a>(n: usize) -> impl FnMut(&'a str) -> IResult<&'a str, i32, Verbos
 
 fn parse_date_internal(input: &str) -> LedgerParseResult<(i32, i32, i32)> {
     tuple((
-        terminated(number_n(4), alt((tag("-"), tag("/"), tag(".")))),
-        terminated(number_n(2), alt((tag("-"), tag("/"), tag(".")))),
+        terminated(number_n(4), alt((char('-'), char('/'), char('.')))),
+        terminated(number_n(2), alt((char('-'), char('/'), char('.')))),
         number_n(2),
     ))(input)
 }
 
 fn parse_time_internal(input: &str) -> LedgerParseResult<(i32, i32, i32)> {
     tuple((
-        terminated(number_n(2), tag(":")),
-        terminated(number_n(2), tag(":")),
+        terminated(number_n(2), char(':')),
+        terminated(number_n(2), char(':')),
         number_n(2),
     ))(input)
 }
@@ -89,14 +78,14 @@ fn parse_quantity(input: &str) -> LedgerParseResult<Decimal> {
                 pair(
                     take_while_m_n(1, 3, AsChar::is_dec_digit),
                     many1(preceded(
-                        tag(","),
+                        char(','),
                         take_while_m_n(3, 3, AsChar::is_dec_digit).map(str::to_owned),
                     )),
                 )
                 .map(|(leading, rest)| format!("{}{}", leading, rest.join(""))),
                 digit0.map(str::to_owned),
             )),
-            opt(recognize(preceded(tag("."), digit1))),
+            opt(recognize(preceded(char('.'), digit1))),
         ))
         .map(|(sign, decimal, fractional)| {
             format!(
@@ -139,7 +128,7 @@ fn parse_commodity(input: &str) -> LedgerParseResult<String> {
 fn parse_amount(input: &str) -> LedgerParseResult<Amount> {
     alt((
         tuple((
-            opt(terminated(tag("-"), space0)),
+            opt(terminated(char('-'), space0)),
             terminated(parse_commodity, space0),
             parse_quantity,
         ))
@@ -186,30 +175,36 @@ fn parse_lot_price(input: &str) -> LedgerParseResult<Price> {
             pair(space0, tag("}}")),
         )
         .map(Price::Total),
-        delimited(pair(tag("{"), space0), parse_amount, pair(space0, tag("}"))).map(Price::Unit),
+        delimited(
+            pair(char('{'), space0),
+            parse_amount,
+            pair(space0, char('}')),
+        )
+        .map(Price::Unit),
     ))(input)
 }
 
 fn parse_price(input: &str) -> LedgerParseResult<Price> {
     alt((
         preceded(pair(tag("@@"), space0), parse_amount).map(Price::Total),
-        preceded(pair(tag("@"), space0), parse_amount).map(Price::Unit),
+        preceded(pair(char('@'), space0), parse_amount).map(Price::Unit),
     ))(input)
 }
 
 fn parse_balance(input: &str) -> LedgerParseResult<Balance> {
     alt((
         parse_amount.map(Balance::Amount),
-        value(Balance::Zero, tag("0")),
+        value(Balance::Zero, char('0')),
     ))(input)
 }
 
 fn parse_commodity_price(input: &str) -> LedgerParseResult<CommodityPrice> {
-    let (input, _) = tag("P")(input)?;
+    let (input, _) = char('P')(input)?;
     let (input, datetime) = preceded(space1, parse_datetime)(input)?;
     let (input, commodity_name) = preceded(space1, parse_commodity)(input)?;
     let (input, amount) = preceded(space1, parse_amount)(input)?;
-    let (input, _) = alt((preceded(space0, parse_inline_comment), eol_or_eof))(input)?;
+    let (input, _) = preceded(space0, opt(preceded(char(';'), not_line_ending)))(input)?;
+    let (input, _) = eol_or_eof(input)?;
 
     Ok((
         input,
@@ -228,7 +223,7 @@ fn parse_empty_line(input: &str) -> LedgerParseResult<&str> {
     ))(input)
 }
 
-fn parse_line_comment(input: &str) -> LedgerParseResult<&str> {
+fn parse_global_line_comment(input: &str) -> LedgerParseResult<&str> {
     let (input, _) = delimited(
         space0,
         alt((char(';'), char('#'), char('%'), char('|'), char('*'))),
@@ -237,9 +232,150 @@ fn parse_line_comment(input: &str) -> LedgerParseResult<&str> {
     terminated(not_line_ending.map(str::trim_end), eol_or_eof)(input)
 }
 
-fn parse_inline_comment(input: &str) -> LedgerParseResult<&str> {
-    let (input, _) = terminated(tag(";"), space0)(input)?;
-    terminated(not_line_ending.map(str::trim_end), eol_or_eof)(input)
+#[derive(Default)]
+struct Metadata {
+    comment: Option<String>,
+    date: Option<NaiveDate>,
+    effective_date: Option<NaiveDate>,
+    tags: Vec<Tag>,
+}
+
+fn parse_metadata_date(input: &str) -> LedgerParseResult<Metadata> {
+    map(
+        preceded(
+            space0,
+            delimited(
+                char('['),
+                pair(opt(parse_date), opt(preceded(char('='), parse_date))),
+                char(']'),
+            ),
+        ),
+        |(date, effective_date)| Metadata {
+            date,
+            effective_date,
+            ..Default::default()
+        },
+    )(input)
+}
+
+fn parse_tag_value(input: &str) -> LedgerParseResult<TagValue> {
+    alt((
+        map_res(
+            recognize(pair(opt(char('-')), terminated(digit1, not(char('.'))))),
+            str::parse,
+        )
+        .map(TagValue::Integer),
+        map_res(double, NotNan::new).map(TagValue::Float),
+        delimited(char('['), parse_date, char(']')).map(TagValue::Date),
+    ))(input)
+}
+
+fn parse_metadata_tag_with_value(input: &str) -> LedgerParseResult<Metadata> {
+    map(
+        preceded(
+            space0,
+            alt((
+                pair(
+                    terminated(alphanumeric1, pair(char(':'), space1)),
+                    not_line_ending.map(str::trim_end),
+                )
+                .map(|(name, value)| (name, TagValue::String(value.to_owned()))),
+                pair(
+                    terminated(alphanumeric1, pair(tag("::"), space1)),
+                    parse_tag_value,
+                ),
+            )),
+        ),
+        |(name, value)| Metadata {
+            tags: vec![Tag {
+                name: name.to_owned(),
+                value: Some(value),
+            }],
+            ..Default::default()
+        },
+    )(input)
+}
+
+fn parse_tags(input: &str) -> LedgerParseResult<Vec<Tag>> {
+    delimited(
+        char(':'),
+        separated_list1(
+            char(':'),
+            alphanumeric1
+                .map(str::to_owned)
+                .map(|name| Tag { name, value: None }),
+        ),
+        char(':'),
+    )(input)
+}
+
+fn parse_comment_with_tags(input: &str) -> LedgerParseResult<Metadata> {
+    map(
+        preceded(
+            space0,
+            tuple((
+                opt(recognize(many1(
+                    none_of(":\r\n").or(not(parse_tags).and(char(':')).map(|(_, c)| c)),
+                ))
+                .map(str::trim_end)),
+                opt(parse_tags),
+                opt(verify(not_line_ending.map(str::trim), |s: &str| {
+                    !s.is_empty()
+                })),
+            )),
+        ),
+        |(s1, v, s2)| Metadata {
+            comment: s1
+                .into_iter()
+                .chain(s2)
+                .map(str::to_owned)
+                .reduce(|mut a, b| {
+                    a.push(' ');
+                    a.push_str(&b);
+                    a
+                }),
+            tags: v.unwrap_or_default(),
+            ..Default::default()
+        },
+    )(input)
+}
+
+fn parse_metadata_comments(input: &str) -> LedgerParseResult<Metadata> {
+    terminated(
+        fold_many0(
+            preceded(
+                many0(pair(space0, line_ending)),
+                preceded(
+                    pair(space0, char(';')),
+                    alt((
+                        parse_metadata_date,
+                        parse_metadata_tag_with_value,
+                        parse_comment_with_tags,
+                    )),
+                ),
+            ),
+            Metadata::default,
+            |meta1, meta2| {
+                let mut tags = meta1.tags;
+                tags.extend(meta2.tags);
+                Metadata {
+                    comment: meta1
+                        .comment
+                        .into_iter()
+                        .chain(meta2.comment)
+                        .reduce(|mut a, b| {
+                            a.push('\n');
+                            a.push_str(&b);
+                            a
+                        }),
+                    date: meta2.date.or(meta1.date),
+                    effective_date: meta2.effective_date.or(meta1.effective_date),
+                    tags,
+                }
+            },
+        ),
+        preceded(space0, eol_or_eof),
+    )(input)
 }
 
 fn parse_include_file(input: &str) -> LedgerParseResult<&str> {
@@ -316,12 +452,20 @@ fn parse_posting(input: &str) -> LedgerParseResult<Posting> {
     let (input, _) = space0(input)?;
     let (input, (account, reality)) = parse_account(input)?;
     let (input, amount) = opt(preceded(space0, parse_posting_amount))(input)?;
-    let (input, balance) =
-        opt(preceded(delimited(space0, tag("="), space0), parse_balance))(input)?;
-    let (input, _) = space0(input)?;
-    let (input, inline_comment) =
-        alt((parse_inline_comment.map(Some), value(None, eol_or_eof)))(input)?;
-    let (input, line_comments) = many0(parse_line_comment)(input)?;
+    let (input, balance) = opt(preceded(
+        delimited(space0, char('='), space0),
+        parse_balance,
+    ))(input)?;
+
+    let (
+        input,
+        Metadata {
+            comment,
+            date,
+            effective_date,
+            tags,
+        },
+    ) = parse_metadata_comments(input)?;
 
     Ok((
         input,
@@ -331,42 +475,58 @@ fn parse_posting(input: &str) -> LedgerParseResult<Posting> {
             amount,
             balance,
             status,
-            comment: join_comments(inline_comment, line_comments),
+            comment,
+            metadata: PostingMetadata {
+                date,
+                effective_date,
+                tags,
+            },
         },
     ))
 }
 
 fn parse_payee(input: &str) -> LedgerParseResult<&str> {
     alt((
-        terminated(take_until_hard_separator, peek(pair(space1, tag(";")))),
+        terminated(take_until_hard_separator, peek(pair(space1, char(';')))),
         not_line_ending,
     ))(input)
 }
 
 fn parse_transaction(input: &str) -> LedgerParseResult<Transaction> {
     let (input, date) = parse_date(input)?;
-    let (input, effective_date) = opt(preceded(tag("="), parse_date))(input)?;
+    let (input, effective_date) = opt(preceded(char('='), parse_date))(input)?;
     let (input, status) = opt(preceded(space1, parse_transaction_status))(input)?;
     let (input, code) = opt(preceded(
         space1,
         delimited(char('('), is_not(")"), char(')')),
     ))(input)?;
     let (input, description) = preceded(space1, parse_payee)(input)?;
-    let (input, _) = space0(input)?;
-    let (input, inline_comment) =
-        alt((parse_inline_comment.map(Some), value(None, eol_or_eof)))(input)?;
-    let (input, line_comments) = many0(parse_line_comment)(input)?;
+
+    let (
+        input,
+        Metadata {
+            comment,
+            date: posting_date,
+            effective_date: posting_effective_date,
+            tags,
+        },
+    ) = parse_metadata_comments(input)?;
     let (input, postings) = many1(parse_posting)(input)?;
 
     Ok((
         input,
         Transaction {
-            comment: join_comments(inline_comment, line_comments),
+            comment,
             date,
             effective_date,
             status,
             code: code.map(str::to_owned),
             description: description.to_owned(),
+            posting_metadata: PostingMetadata {
+                date: posting_date,
+                effective_date: posting_effective_date,
+                tags,
+            },
             postings,
         },
     ))
@@ -375,7 +535,7 @@ fn parse_transaction(input: &str) -> LedgerParseResult<Transaction> {
 fn parse_ledger_item(input: &str) -> LedgerParseResult<LedgerItem> {
     alt((
         value(LedgerItem::EmptyLine, parse_empty_line),
-        parse_line_comment
+        parse_global_line_comment
             .map(str::to_owned)
             .map(LedgerItem::LineComment),
         parse_transaction.map(LedgerItem::Transaction),
@@ -405,15 +565,15 @@ mod tests {
     fn parse_date_test() {
         assert_eq!(
             parse_date("2017-03-24"),
-            Ok(("", NaiveDate::from_ymd(2017, 3, 24)))
+            Ok(("", NaiveDate::from_ymd_opt(2017, 3, 24).unwrap()))
         );
         assert_eq!(
             parse_date("2017/03/24"),
-            Ok(("", NaiveDate::from_ymd(2017, 3, 24)))
+            Ok(("", NaiveDate::from_ymd_opt(2017, 3, 24).unwrap()))
         );
         assert_eq!(
             parse_date("2017.03.24"),
-            Ok(("", NaiveDate::from_ymd(2017, 3, 24)))
+            Ok(("", NaiveDate::from_ymd_opt(2017, 3, 24).unwrap()))
         );
         assert_eq!(
             parse_date("2017-13-24"),
@@ -428,7 +588,13 @@ mod tests {
     fn parse_datetime_test() {
         assert_eq!(
             parse_datetime("2017-03-24 17:15:23"),
-            Ok(("", NaiveDate::from_ymd(2017, 3, 24).and_hms(17, 15, 23)))
+            Ok((
+                "",
+                NaiveDate::from_ymd_opt(2017, 3, 24)
+                    .unwrap()
+                    .and_hms_opt(17, 15, 23)
+                    .unwrap()
+            ))
         );
         assert_eq!(
             parse_datetime("2017-13-24 22:11:22"),
@@ -815,7 +981,10 @@ mod tests {
             Ok((
                 "",
                 CommodityPrice {
-                    datetime: NaiveDate::from_ymd(2017, 11, 12).and_hms(12, 00, 00),
+                    datetime: NaiveDate::from_ymd_opt(2017, 11, 12)
+                        .unwrap()
+                        .and_hms_opt(12, 00, 00)
+                        .unwrap(),
                     commodity_name: "mBH".to_owned(),
                     amount: Amount {
                         quantity: Decimal::new(500, 2),
@@ -888,6 +1057,11 @@ mod tests {
                     balance: None,
                     status: None,
                     comment: None,
+                    metadata: PostingMetadata {
+                        date: None,
+                        effective_date: None,
+                        tags: vec![],
+                    },
                 }
             ))
         );
@@ -911,7 +1085,12 @@ mod tests {
                     }),
                     balance: None,
                     status: Some(TransactionStatus::Pending),
-                    comment: Some("test\ncomment line 2".to_owned())
+                    comment: Some("test\ncomment line 2".to_owned()),
+                    metadata: PostingMetadata {
+                        date: None,
+                        effective_date: None,
+                        tags: vec![],
+                    },
                 }
             ))
         );
@@ -925,7 +1104,12 @@ mod tests {
                     amount: None,
                     balance: None,
                     status: Some(TransactionStatus::Pending),
-                    comment: Some("comment".to_owned())
+                    comment: Some("comment".to_owned()),
+                    metadata: PostingMetadata {
+                        date: None,
+                        effective_date: None,
+                        tags: vec![],
+                    },
                 }
             ))
         );
@@ -939,7 +1123,12 @@ mod tests {
                     amount: None,
                     balance: None,
                     status: Some(TransactionStatus::Pending),
-                    comment: Some("test\ncomment line 2".to_owned())
+                    comment: Some("test\ncomment line 2".to_owned()),
+                    metadata: PostingMetadata {
+                        date: None,
+                        effective_date: None,
+                        tags: vec![],
+                    },
                 }
             ))
         );
@@ -953,7 +1142,12 @@ mod tests {
                     amount: None,
                     balance: None,
                     status: Some(TransactionStatus::Pending),
-                    comment: Some("test\ncomment line 2".to_owned())
+                    comment: Some("test\ncomment line 2".to_owned()),
+                    metadata: PostingMetadata {
+                        date: None,
+                        effective_date: None,
+                        tags: vec![],
+                    },
                 }
             ))
         );
@@ -983,7 +1177,12 @@ mod tests {
                         }
                     })),
                     status: None,
-                    comment: Some("comment".to_owned())
+                    comment: Some("comment".to_owned()),
+                    metadata: PostingMetadata {
+                        date: None,
+                        effective_date: None,
+                        tags: vec![],
+                    },
                 }
             ))
         );
@@ -997,7 +1196,12 @@ mod tests {
                     amount: None,
                     balance: None,
                     status: None,
-                    comment: None
+                    comment: None,
+                    metadata: PostingMetadata {
+                        date: None,
+                        effective_date: None,
+                        tags: vec![],
+                    },
                 }
             ))
         );
@@ -1012,6 +1216,238 @@ mod tests {
                     balance: None,
                     status: None,
                     comment: Some("456".to_owned()),
+                    metadata: PostingMetadata {
+                        date: None,
+                        effective_date: None,
+                        tags: vec![],
+                    },
+                }
+            ))
+        );
+        assert_eq!(
+            parse_posting(" TEST:ABC 123   ; [2018-10-01]"),
+            Ok((
+                "",
+                Posting {
+                    account: "TEST:ABC 123".to_owned(),
+                    reality: Reality::Real,
+                    amount: None,
+                    balance: None,
+                    status: None,
+                    comment: None,
+                    metadata: PostingMetadata {
+                        date: Some(NaiveDate::from_ymd_opt(2018, 10, 1).unwrap()),
+                        effective_date: None,
+                        tags: vec![],
+                    },
+                }
+            ))
+        );
+        assert_eq!(
+            parse_posting(" TEST:ABC 123   ; [=2018-10-01]"),
+            Ok((
+                "",
+                Posting {
+                    account: "TEST:ABC 123".to_owned(),
+                    reality: Reality::Real,
+                    amount: None,
+                    balance: None,
+                    status: None,
+                    comment: None,
+                    metadata: PostingMetadata {
+                        date: None,
+                        effective_date: Some(NaiveDate::from_ymd_opt(2018, 10, 1).unwrap()),
+                        tags: vec![],
+                    },
+                }
+            ))
+        );
+        assert_eq!(
+            parse_posting(" TEST:ABC 123   ; [2018-10-01=2018-10-14]"),
+            Ok((
+                "",
+                Posting {
+                    account: "TEST:ABC 123".to_owned(),
+                    reality: Reality::Real,
+                    amount: None,
+                    balance: None,
+                    status: None,
+                    comment: None,
+                    metadata: PostingMetadata {
+                        date: Some(NaiveDate::from_ymd_opt(2018, 10, 1).unwrap()),
+                        effective_date: Some(NaiveDate::from_ymd_opt(2018, 10, 14).unwrap()),
+                        tags: vec![],
+                    },
+                }
+            ))
+        );
+        assert_eq!(
+            parse_posting(" TEST:ABC 123   ; Tag: tag value"),
+            Ok((
+                "",
+                Posting {
+                    account: "TEST:ABC 123".to_owned(),
+                    reality: Reality::Real,
+                    amount: None,
+                    balance: None,
+                    status: None,
+                    comment: None,
+                    metadata: PostingMetadata {
+                        date: None,
+                        effective_date: None,
+                        tags: vec![Tag {
+                            name: "Tag".to_owned(),
+                            value: Some(TagValue::String("tag value".to_owned())),
+                        }],
+                    },
+                }
+            ))
+        );
+        assert_eq!(
+            parse_posting(" TEST:ABC 123   ; :tag1:tag2:   "),
+            Ok((
+                "",
+                Posting {
+                    account: "TEST:ABC 123".to_owned(),
+                    reality: Reality::Real,
+                    amount: None,
+                    balance: None,
+                    status: None,
+                    comment: None,
+                    metadata: PostingMetadata {
+                        date: None,
+                        effective_date: None,
+                        tags: vec![
+                            Tag {
+                                name: "tag1".to_owned(),
+                                value: None,
+                            },
+                            Tag {
+                                name: "tag2".to_owned(),
+                                value: None,
+                            }
+                        ],
+                    },
+                }
+            ))
+        );
+        assert_eq!(
+            parse_posting(" TEST:ABC 123   ; comment :tag1:tag2: and: more comment"),
+            Ok((
+                "",
+                Posting {
+                    account: "TEST:ABC 123".to_owned(),
+                    reality: Reality::Real,
+                    amount: None,
+                    balance: None,
+                    status: None,
+                    comment: Some("comment and: more comment".to_owned()),
+                    metadata: PostingMetadata {
+                        date: None,
+                        effective_date: None,
+                        tags: vec![
+                            Tag {
+                                name: "tag1".to_owned(),
+                                value: None,
+                            },
+                            Tag {
+                                name: "tag2".to_owned(),
+                                value: None,
+                            }
+                        ],
+                    },
+                }
+            ))
+        );
+        assert_eq!(
+            parse_posting(" TEST:ABC 123   ; Tag:: [2018-01-05]"),
+            Ok((
+                "",
+                Posting {
+                    account: "TEST:ABC 123".to_owned(),
+                    reality: Reality::Real,
+                    amount: None,
+                    balance: None,
+                    status: None,
+                    comment: None,
+                    metadata: PostingMetadata {
+                        date: None,
+                        effective_date: None,
+                        tags: vec![Tag {
+                            name: "Tag".to_owned(),
+                            value: Some(TagValue::Date(
+                                NaiveDate::from_ymd_opt(2018, 1, 5).unwrap()
+                            ))
+                        }],
+                    },
+                }
+            ))
+        );
+        assert_eq!(
+            parse_posting(" TEST:ABC 123   ; TheAnswer:: 42"),
+            Ok((
+                "",
+                Posting {
+                    account: "TEST:ABC 123".to_owned(),
+                    reality: Reality::Real,
+                    amount: None,
+                    balance: None,
+                    status: None,
+                    comment: None,
+                    metadata: PostingMetadata {
+                        date: None,
+                        effective_date: None,
+                        tags: vec![Tag {
+                            name: "TheAnswer".to_owned(),
+                            value: Some(TagValue::Integer(42))
+                        }],
+                    },
+                }
+            ))
+        );
+        assert_eq!(
+            parse_posting(" TEST:ABC 123   ; ISquared:: -1"),
+            Ok((
+                "",
+                Posting {
+                    account: "TEST:ABC 123".to_owned(),
+                    reality: Reality::Real,
+                    amount: None,
+                    balance: None,
+                    status: None,
+                    comment: None,
+                    metadata: PostingMetadata {
+                        date: None,
+                        effective_date: None,
+                        tags: vec![Tag {
+                            name: "ISquared".to_owned(),
+                            value: Some(TagValue::Integer(-1))
+                        }],
+                    },
+                }
+            ))
+        );
+        assert_eq!(
+            parse_posting(" TEST:ABC 123   ; Pi:: 3.141592653589793"),
+            Ok((
+                "",
+                Posting {
+                    account: "TEST:ABC 123".to_owned(),
+                    reality: Reality::Real,
+                    amount: None,
+                    balance: None,
+                    status: None,
+                    comment: None,
+                    metadata: PostingMetadata {
+                        date: None,
+                        effective_date: None,
+                        tags: vec![Tag {
+                            name: "Pi".to_owned(),
+                            value: Some(TagValue::Float(
+                                NotNan::new(std::f64::consts::PI).unwrap()
+                            ))
+                        }],
+                    },
                 }
             ))
         );
@@ -1030,8 +1466,13 @@ mod tests {
                 "",
                 Transaction {
                     comment: Some("Transaction comment".to_owned()),
-                    date: NaiveDate::from_ymd(2018, 10, 1),
-                    effective_date: Some(NaiveDate::from_ymd(2018, 10, 14)),
+                    date: NaiveDate::from_ymd_opt(2018, 10, 1).unwrap(),
+                    effective_date: Some(NaiveDate::from_ymd_opt(2018, 10, 14).unwrap()),
+                    posting_metadata: PostingMetadata {
+                        date: None,
+                        effective_date: None,
+                        tags: vec![],
+                    },
                     status: Some(TransactionStatus::Pending),
                     code: Some("123".to_owned()),
                     description: "Marek Ogarek".to_owned(),
@@ -1053,6 +1494,11 @@ mod tests {
                             balance: None,
                             status: None,
                             comment: Some("Posting comment\nover two lines".to_owned()),
+                            metadata: PostingMetadata {
+                                date: None,
+                                effective_date: None,
+                                tags: vec![],
+                            },
                         },
                         Posting {
                             account: "TEST:ABC 123".to_owned(),
@@ -1071,6 +1517,11 @@ mod tests {
                             balance: None,
                             status: None,
                             comment: None,
+                            metadata: PostingMetadata {
+                                date: None,
+                                effective_date: None,
+                                tags: vec![],
+                            },
                         }
                     ]
                 }
@@ -1088,8 +1539,13 @@ mod tests {
                 "",
                 Transaction {
                     comment: None,
-                    date: NaiveDate::from_ymd(2018, 10, 1),
-                    effective_date: Some(NaiveDate::from_ymd(2018, 10, 14)),
+                    date: NaiveDate::from_ymd_opt(2018, 10, 1).unwrap(),
+                    effective_date: Some(NaiveDate::from_ymd_opt(2018, 10, 14).unwrap()),
+                    posting_metadata: PostingMetadata {
+                        date: None,
+                        effective_date: None,
+                        tags: vec![],
+                    },
                     status: None,
                     code: None,
                     description: "Marek Ogarek ; one space".to_owned(),
@@ -1111,6 +1567,11 @@ mod tests {
                             balance: None,
                             status: None,
                             comment: Some("test".to_owned()),
+                            metadata: PostingMetadata {
+                                date: None,
+                                effective_date: None,
+                                tags: vec![],
+                            },
                         },
                         Posting {
                             balance: None,
@@ -1129,6 +1590,11 @@ mod tests {
                             }),
                             status: None,
                             comment: None,
+                            metadata: PostingMetadata {
+                                date: None,
+                                effective_date: None,
+                                tags: vec![],
+                            },
                         },
                         Posting {
                             account: "TEST:GHI 123".to_owned(),
@@ -1137,6 +1603,11 @@ mod tests {
                             balance: None,
                             status: None,
                             comment: None,
+                            metadata: PostingMetadata {
+                                date: None,
+                                effective_date: None,
+                                tags: vec![],
+                            },
                         },
                         Posting {
                             account: "TEST:JKL 123".to_owned(),
@@ -1155,6 +1626,11 @@ mod tests {
                             balance: None,
                             status: None,
                             comment: None,
+                            metadata: PostingMetadata {
+                                date: None,
+                                effective_date: None,
+                                tags: vec![],
+                            },
                         },
                     ]
                 }
@@ -1170,8 +1646,13 @@ mod tests {
                 "",
                 Transaction {
                     comment: None,
-                    date: NaiveDate::from_ymd(2018, 10, 1),
-                    effective_date: Some(NaiveDate::from_ymd(2018, 10, 14)),
+                    date: NaiveDate::from_ymd_opt(2018, 10, 1).unwrap(),
+                    effective_date: Some(NaiveDate::from_ymd_opt(2018, 10, 14).unwrap()),
+                    posting_metadata: PostingMetadata {
+                        date: None,
+                        effective_date: None,
+                        tags: vec![],
+                    },
                     status: Some(TransactionStatus::Pending),
                     code: Some("123".to_owned()),
                     description: "Marek Ogarek  two spaces".to_owned(),
@@ -1193,6 +1674,11 @@ mod tests {
                             balance: None,
                             status: None,
                             comment: Some("test".to_owned()),
+                            metadata: PostingMetadata {
+                                date: None,
+                                effective_date: None,
+                                tags: vec![],
+                            },
                         },
                         Posting {
                             account: "TEST:DEF 123".to_owned(),
@@ -1201,6 +1687,11 @@ mod tests {
                             balance: None,
                             status: None,
                             comment: None,
+                            metadata: PostingMetadata {
+                                date: None,
+                                effective_date: None,
+                                tags: vec![],
+                            },
                         },
                     ]
                 }
@@ -1223,7 +1714,7 @@ mod tests {
 
 include other_file.ledger
 
-P 2017-11-12 12:00:00 mBH 5.00 PLN
+P 2017-11-12 12:00:00 mBH 5.00 PLN  ; comment
 
 ; Comment
 2018-10-01=2018-10-14 ! (123) Marek Ogarek

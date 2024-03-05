@@ -29,7 +29,18 @@ Supported elements:
   ```
 
   - Virtual accounts are supported
-  
+
+  - Posting comments with dates, effective dates, and metadata tags are supported
+  ```ledger-cli
+    ACCOUNT  [AMOUNT] [= BALANCE]  ; [YYYY-MM-DD]
+    ACCOUNT  [AMOUNT] [= BALANCE]  ; [=YYYY-MM-DD]
+    ACCOUNT  [AMOUNT] [= BALANCE]  ; :TAG1:TAG2:
+    ACCOUNT  [AMOUNT] [= BALANCE]  ; Tag: String Value
+    ACCOUNT  [AMOUNT] [= BALANCE]  ; Tag:: -1
+    ACCOUNT  [AMOUNT] [= BALANCE]  ; Tag:: 1.0
+    ACCOUNT  [AMOUNT] [= BALANCE]  ; Tag:: [YYYY-MM-DD]
+  ```
+
 - `AMOUNT` can be combined with lot and commodity prices ({}, {{}}, @, @@)
 
 - Commodity prices with format:
@@ -45,12 +56,13 @@ Supported elements:
 Parsing:
 
 ```rust
-let ledger = ledger_parser::parse(r#"; Example 1
+let ledger: ledger_parser::Ledger = r#"; Example 1
 2018-10-01=2018-10-14 ! (123) Description
   ; Transaction comment
   TEST:Account 123  $1.20
   ; Posting comment
-  TEST:Account 345  -$1.20"#)?;
+  TEST:Account 345  -$1.20"#
+    .parse()?;
 ```
 
 Serializing:

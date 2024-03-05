@@ -1,7 +1,12 @@
+use crate::parser;
 use crate::serializer::*;
+use crate::ParseError;
 use chrono::{NaiveDate, NaiveDateTime};
+use nom::{error::convert_error, Finish};
+use ordered_float::NotNan;
 use rust_decimal::Decimal;
 use std::fmt;
+use std::str::FromStr;
 
 ///
 /// Main document. Contains transactions and/or commodity prices.
@@ -9,6 +14,18 @@ use std::fmt;
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Ledger {
     pub items: Vec<LedgerItem>,
+}
+
+impl FromStr for Ledger {
+    type Err = ParseError;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        let result = parser::parse_ledger(input);
+        match result.finish() {
+            Ok((_, result)) => Ok(result),
+            Err(error) => Err(ParseError::String(convert_error(input, error))),
+        }
+    }
 }
 
 impl fmt::Display for Ledger {
@@ -48,12 +65,13 @@ impl fmt::Display for LedgerItem {
 ///
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Transaction {
-    pub comment: Option<String>,
-    pub date: NaiveDate,
-    pub effective_date: Option<NaiveDate>,
     pub status: Option<TransactionStatus>,
     pub code: Option<String>,
     pub description: String,
+    pub comment: Option<String>,
+    pub date: NaiveDate,
+    pub effective_date: Option<NaiveDate>,
+    pub posting_metadata: PostingMetadata,
     pub postings: Vec<Posting>,
 }
 
@@ -93,6 +111,7 @@ pub struct Posting {
     pub balance: Option<Balance>,
     pub status: Option<TransactionStatus>,
     pub comment: Option<String>,
+    pub metadata: PostingMetadata,
 }
 
 impl fmt::Display for Posting {
@@ -204,6 +223,41 @@ impl fmt::Display for CommodityPrice {
     }
 }
 
+///
+/// Posting metadata. Also appears on Transaction
+///
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct PostingMetadata {
+    pub date: Option<NaiveDate>,
+    pub effective_date: Option<NaiveDate>,
+    pub tags: Vec<Tag>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Tag {
+    pub name: String,
+    pub value: Option<TagValue>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TagValue {
+    String(String),
+    Integer(i64),
+    Float(NotNan<f64>),
+    Date(NaiveDate),
+}
+
+impl fmt::Display for TagValue {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            TagValue::String(v) => v.fmt(f),
+            TagValue::Integer(v) => v.fmt(f),
+            TagValue::Float(v) => v.fmt(f),
+            TagValue::Date(v) => write!(f, "[{v}]"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -251,7 +305,10 @@ mod tests {
         let actual = format!(
             "{}",
             CommodityPrice {
-                datetime: NaiveDate::from_ymd(2017, 11, 12).and_hms(12, 00, 00),
+                datetime: NaiveDate::from_ymd_opt(2017, 11, 12)
+                    .unwrap()
+                    .and_hms_opt(12, 0, 0)
+                    .unwrap(),
                 commodity_name: "mBH".to_owned(),
                 amount: Amount {
                     quantity: Decimal::new(500, 2),
@@ -312,6 +369,11 @@ mod tests {
                     })),
                     status: Some(TransactionStatus::Cleared),
                     comment: Some("asdf".to_owned()),
+                    metadata: PostingMetadata {
+                        date: None,
+                        effective_date: None,
+                        tags: vec![],
+                    },
                 }
             ),
             "* Assets:Checking  USD42.00 = USD50.00\n  ; asdf"
@@ -324,11 +386,16 @@ mod tests {
             "{}",
             Transaction {
                 comment: Some("Comment Line 1\nComment Line 2".to_owned()),
-                date: NaiveDate::from_ymd(2018, 10, 01),
-                effective_date: Some(NaiveDate::from_ymd(2018, 10, 14)),
+                date: NaiveDate::from_ymd_opt(2018, 10, 1).unwrap(),
+                effective_date: Some(NaiveDate::from_ymd_opt(2018, 10, 14).unwrap()),
                 status: Some(TransactionStatus::Pending),
                 code: Some("123".to_owned()),
                 description: "Marek Ogarek".to_owned(),
+                posting_metadata: PostingMetadata {
+                    date: None,
+                    effective_date: None,
+                    tags: vec![],
+                },
                 postings: vec![
                     Posting {
                         account: "TEST:ABC 123".to_owned(),
@@ -346,7 +413,12 @@ mod tests {
                         }),
                         balance: None,
                         status: None,
-                        comment: Some("dd".to_owned())
+                        comment: Some("dd".to_owned()),
+                        metadata: PostingMetadata {
+                            date: None,
+                            effective_date: None,
+                            tags: vec![],
+                        },
                     },
                     Posting {
                         account: "TEST:ABC 123".to_owned(),
@@ -364,7 +436,12 @@ mod tests {
                         }),
                         balance: None,
                         status: None,
-                        comment: None
+                        comment: None,
+                        metadata: PostingMetadata {
+                            date: None,
+                            effective_date: None,
+                            tags: vec![],
+                        },
                     }
                 ]
             },
@@ -386,11 +463,16 @@ mod tests {
                 items: vec![
                     LedgerItem::Transaction(Transaction {
                         comment: Some("Comment Line 1\nComment Line 2".to_owned()),
-                        date: NaiveDate::from_ymd(2018, 10, 01),
-                        effective_date: Some(NaiveDate::from_ymd(2018, 10, 14)),
+                        date: NaiveDate::from_ymd_opt(2018, 10, 1).unwrap(),
+                        effective_date: Some(NaiveDate::from_ymd_opt(2018, 10, 14).unwrap()),
                         status: Some(TransactionStatus::Pending),
                         code: Some("123".to_owned()),
                         description: "Marek Ogarek".to_owned(),
+                        posting_metadata: PostingMetadata {
+                            date: None,
+                            effective_date: None,
+                            tags: vec![],
+                        },
                         postings: vec![
                             Posting {
                                 account: "TEST:ABC 123".to_owned(),
@@ -408,7 +490,12 @@ mod tests {
                                 }),
                                 balance: None,
                                 status: None,
-                                comment: Some("dd".to_owned())
+                                comment: Some("dd".to_owned()),
+                                metadata: PostingMetadata {
+                                    date: None,
+                                    effective_date: None,
+                                    tags: vec![],
+                                },
                             },
                             Posting {
                                 account: "TEST:ABC 123".to_owned(),
@@ -426,15 +513,25 @@ mod tests {
                                 }),
                                 balance: None,
                                 status: None,
-                                comment: None
+                                comment: None,
+                                metadata: PostingMetadata {
+                                    date: None,
+                                    effective_date: None,
+                                    tags: vec![],
+                                },
                             }
                         ]
                     }),
                     LedgerItem::EmptyLine,
                     LedgerItem::Transaction(Transaction {
                         comment: None,
-                        date: NaiveDate::from_ymd(2018, 10, 01),
-                        effective_date: Some(NaiveDate::from_ymd(2018, 10, 14)),
+                        date: NaiveDate::from_ymd_opt(2018, 10, 1).unwrap(),
+                        effective_date: Some(NaiveDate::from_ymd_opt(2018, 10, 14).unwrap()),
+                        posting_metadata: PostingMetadata {
+                            date: None,
+                            effective_date: None,
+                            tags: vec![],
+                        },
                         status: Some(TransactionStatus::Pending),
                         code: Some("123".to_owned()),
                         description: "Marek Ogarek".to_owned(),
@@ -467,7 +564,12 @@ mod tests {
                                 }),
                                 balance: None,
                                 status: None,
-                                comment: None
+                                comment: None,
+                                metadata: PostingMetadata {
+                                    date: None,
+                                    effective_date: None,
+                                    tags: vec![],
+                                },
                             },
                             Posting {
                                 account: "TEST:ABC 123".to_owned(),
@@ -497,13 +599,21 @@ mod tests {
                                 }),
                                 balance: None,
                                 status: None,
-                                comment: None
+                                comment: None,
+                                metadata: PostingMetadata {
+                                    date: None,
+                                    effective_date: None,
+                                    tags: vec![],
+                                },
                             }
                         ]
                     }),
                     LedgerItem::EmptyLine,
                     LedgerItem::CommodityPrice(CommodityPrice {
-                        datetime: NaiveDate::from_ymd(2017, 11, 12).and_hms(12, 00, 00),
+                        datetime: NaiveDate::from_ymd_opt(2017, 11, 12)
+                            .unwrap()
+                            .and_hms_opt(12, 0, 0)
+                            .unwrap(),
                         commodity_name: "mBH".to_owned(),
                         amount: Amount {
                             quantity: Decimal::new(500, 2),

@@ -39,10 +39,9 @@ pub use serializer::*;
 
 mod parser;
 
-use nom::{error::convert_error, Finish};
 use std::fmt;
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ParseError {
     String(String),
 }
@@ -76,9 +75,5 @@ impl std::error::Error for ParseError {
 ///   TEST:Account 345  -$1.20"#);
 /// ```
 pub fn parse(input: &str) -> Result<Ledger, ParseError> {
-    let result = parser::parse_ledger(input);
-    match result.finish() {
-        Ok((_, result)) => Ok(result),
-        Err(error) => Err(ParseError::String(convert_error(input, error))),
-    }
+    input.parse()
 }
