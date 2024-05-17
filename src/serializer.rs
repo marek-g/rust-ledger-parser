@@ -5,6 +5,8 @@ use std::io;
 pub struct SerializerSettings {
     pub indent: String,
     pub eol: String,
+    pub transaction_date_format: String,
+    pub commodity_date_format: String,
 }
 
 impl SerializerSettings {
@@ -24,6 +26,8 @@ impl Default for SerializerSettings {
         Self {
             indent: "  ".to_owned(),
             eol: "\n".to_owned(),
+            transaction_date_format: "%Y-%m-%d".to_owned(),
+            commodity_date_format: "%Y-%m-%d %H:%M:%S".to_owned(),
         }
     }
 }
@@ -79,10 +83,18 @@ impl Serializer for Transaction {
     where
         W: io::Write,
     {
-        write!(writer, "{}", self.date.format("%Y-%m-%d"))?;
+        write!(
+            writer,
+            "{}",
+            self.date.format(&settings.transaction_date_format)
+        )?;
 
         if let Some(effective_date) = self.effective_date {
-            write!(writer, "={}", effective_date.format("%Y-%m-%d"))?;
+            write!(
+                writer,
+                "={}",
+                effective_date.format(&settings.transaction_date_format)
+            )?;
         }
 
         if let Some(ref status) = self.status {
@@ -238,10 +250,67 @@ impl Serializer for CommodityPrice {
         write!(
             writer,
             "P {} {} ",
-            self.datetime.format("%Y-%m-%d %H:%M:%S"),
+            self.datetime.format(&settings.commodity_date_format),
             self.commodity_name
         )?;
         self.amount.write(writer, settings)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn serialize_transaction() {
+        let ledger = crate::parse(
+            r#"2018/10/01    (123)     Payee 123
+  TEST:ABC 123        $1.20
+    TEST:DEF 123"#,
+        )
+        .expect("parsing test transaction");
+
+        let mut buf = Vec::new();
+        ledger
+            .write(&mut buf, &SerializerSettings::default())
+            .expect("serializing test transaction");
+
+        assert_eq!(
+            String::from_utf8(buf).unwrap(),
+            r#"2018-10-01 (123) Payee 123
+  TEST:ABC 123  $1.20
+  TEST:DEF 123
+"#
+        );
+    }
+
+    #[test]
+    fn serialize_with_custom_date_format() {
+        let ledger = crate::parse(
+            r#"2018-10-01    (123)     Payee 123
+  TEST:ABC 123        $1.20
+    TEST:DEF 123"#,
+        )
+        .expect("parsing test transaction");
+
+        let mut buf = Vec::new();
+        ledger
+            .write(
+                &mut buf,
+                &SerializerSettings {
+                    transaction_date_format: "%Y/%m/%d".to_owned(),
+                    ..SerializerSettings::default()
+                },
+            )
+            .expect("serializing test transaction");
+
+        assert_eq!(
+            String::from_utf8(buf).unwrap(),
+            r#"2018/10/01 (123) Payee 123
+  TEST:ABC 123  $1.20
+  TEST:DEF 123
+"#
+        );
     }
 }
