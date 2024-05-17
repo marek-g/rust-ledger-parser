@@ -94,8 +94,11 @@ impl Serializer for Transaction {
             write!(writer, " ({})", code)?;
         }
 
-        if !self.description.is_empty() {
-            write!(writer, " {}", self.description)?;
+        // for the None case, ledger would print "<Unspecified payee>"
+        if let Some(ref description) = self.description {
+            if !description.is_empty() {
+                write!(writer, " {}", description)?;
+            }
         }
 
         if let Some(ref comment) = self.comment {
