@@ -119,6 +119,13 @@ impl Serializer for Transaction {
             }
         }
 
+        for tag in &self.posting_metadata.tags {
+            write!(writer, "{}{}; {}", settings.eol, settings.indent, tag.name)?;
+            if let Some(ref value) = tag.value {
+                write!(writer, ": {}", value)?;
+            };
+        }
+
         for posting in &self.postings {
             write!(writer, "{}{}", settings.eol, settings.indent)?;
             posting.write(writer, settings)?;
@@ -167,6 +174,13 @@ impl Serializer for Posting {
         if let Some(ref balance) = self.balance {
             write!(writer, " = ")?;
             balance.write(writer, settings)?;
+        }
+
+        for tag in &self.metadata.tags {
+            write!(writer, "{}; {}", settings.indent, tag.name)?;
+            if let Some(ref value) = tag.value {
+                write!(writer, ": {}", value)?;
+            };
         }
 
         if let Some(ref comment) = self.comment {
@@ -309,6 +323,31 @@ mod tests {
             String::from_utf8(buf).unwrap(),
             r#"2018/10/01 (123) Payee 123
   TEST:ABC 123  $1.20
+  TEST:DEF 123
+"#
+        );
+    }
+
+    #[test]
+    fn serialize_tags() {
+        let ledger = crate::parse(
+            r#"2018-10-01   (123)    Payee 123
+  ;   Tag1:   Foo bar
+  TEST:ABC 123       $1.20      ;   Tag2:  Fizz bazz
+  TEST:DEF 123"#,
+        )
+        .expect("parsing test transaction");
+
+        let mut buf = Vec::new();
+        ledger
+            .write(&mut buf, &SerializerSettings::default())
+            .expect("serializing test transaction");
+
+        assert_eq!(
+            String::from_utf8(buf).unwrap(),
+            r#"2018-10-01 (123) Payee 123
+  ; Tag1: Foo bar
+  TEST:ABC 123  $1.20  ; Tag2: Fizz bazz
   TEST:DEF 123
 "#
         );
