@@ -67,7 +67,7 @@ impl fmt::Display for LedgerItem {
 pub struct Transaction {
     pub status: Option<TransactionStatus>,
     pub code: Option<String>,
-    pub description: String,
+    pub description: Option<String>,
     pub comment: Option<String>,
     pub date: NaiveDate,
     pub effective_date: Option<NaiveDate>,
@@ -390,7 +390,7 @@ mod tests {
                 effective_date: Some(NaiveDate::from_ymd_opt(2018, 10, 14).unwrap()),
                 status: Some(TransactionStatus::Pending),
                 code: Some("123".to_owned()),
-                description: "Marek Ogarek".to_owned(),
+                description: Some("Marek Ogarek".to_owned()),
                 posting_metadata: PostingMetadata {
                     date: None,
                     effective_date: None,
@@ -467,7 +467,7 @@ mod tests {
                         effective_date: Some(NaiveDate::from_ymd_opt(2018, 10, 14).unwrap()),
                         status: Some(TransactionStatus::Pending),
                         code: Some("123".to_owned()),
-                        description: "Marek Ogarek".to_owned(),
+                        description: Some("Marek Ogarek".to_owned()),
                         posting_metadata: PostingMetadata {
                             date: None,
                             effective_date: None,
@@ -534,7 +534,7 @@ mod tests {
                         },
                         status: Some(TransactionStatus::Pending),
                         code: Some("123".to_owned()),
-                        description: "Marek Ogarek".to_owned(),
+                        description: Some("Marek Ogarek".to_owned()),
                         postings: vec![
                             Posting {
                                 account: "TEST:ABC 123".to_owned(),

@@ -5,6 +5,12 @@ use std::io;
 pub struct SerializerSettings {
     pub indent: String,
     pub eol: String,
+
+    pub transaction_date_format: String,
+    pub commodity_date_format: String,
+
+    /// Should single line posting comments be printed on the same line as the posting?
+    pub posting_comments_sameline: bool,
 }
 
 impl SerializerSettings {
@@ -24,6 +30,9 @@ impl Default for SerializerSettings {
         Self {
             indent: "  ".to_owned(),
             eol: "\n".to_owned(),
+            transaction_date_format: "%Y-%m-%d".to_owned(),
+            commodity_date_format: "%Y-%m-%d %H:%M:%S".to_owned(),
+            posting_comments_sameline: false,
         }
     }
 }
@@ -79,10 +88,18 @@ impl Serializer for Transaction {
     where
         W: io::Write,
     {
-        write!(writer, "{}", self.date.format("%Y-%m-%d"))?;
+        write!(
+            writer,
+            "{}",
+            self.date.format(&settings.transaction_date_format)
+        )?;
 
         if let Some(effective_date) = self.effective_date {
-            write!(writer, "={}", effective_date.format("%Y-%m-%d"))?;
+            write!(
+                writer,
+                "={}",
+                effective_date.format(&settings.transaction_date_format)
+            )?;
         }
 
         if let Some(ref status) = self.status {
@@ -94,14 +111,24 @@ impl Serializer for Transaction {
             write!(writer, " ({})", code)?;
         }
 
-        if !self.description.is_empty() {
-            write!(writer, " {}", self.description)?;
+        // for the None case, ledger would print "<Unspecified payee>"
+        if let Some(ref description) = self.description {
+            if !description.is_empty() {
+                write!(writer, " {}", description)?;
+            }
         }
 
         if let Some(ref comment) = self.comment {
             for comment in comment.split('\n') {
                 write!(writer, "{}{}; {}", settings.eol, settings.indent, comment)?;
             }
+        }
+
+        for tag in &self.posting_metadata.tags {
+            write!(writer, "{}{}; {}", settings.eol, settings.indent, tag.name)?;
+            if let Some(ref value) = tag.value {
+                write!(writer, ": {}", value)?;
+            };
         }
 
         for posting in &self.postings {
@@ -154,9 +181,20 @@ impl Serializer for Posting {
             balance.write(writer, settings)?;
         }
 
+        for tag in &self.metadata.tags {
+            write!(writer, "{}; {}", settings.indent, tag.name)?;
+            if let Some(ref value) = tag.value {
+                write!(writer, ": {}", value)?;
+            };
+        }
+
         if let Some(ref comment) = self.comment {
-            for comment in comment.split('\n') {
-                write!(writer, "{}{}; {}", settings.eol, settings.indent, comment)?;
+            if !comment.contains('\n') && settings.posting_comments_sameline {
+                write!(writer, "{}; {}", settings.indent, comment)?;
+            } else {
+                for comment in comment.split('\n') {
+                    write!(writer, "{}{}; {}", settings.eol, settings.indent, comment)?;
+                }
             }
         }
 
@@ -235,10 +273,126 @@ impl Serializer for CommodityPrice {
         write!(
             writer,
             "P {} {} ",
-            self.datetime.format("%Y-%m-%d %H:%M:%S"),
+            self.datetime.format(&settings.commodity_date_format),
             self.commodity_name
         )?;
         self.amount.write(writer, settings)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn serialize_transaction() {
+        let ledger = crate::parse(
+            r#"2018/10/01    (123)     Payee 123
+  TEST:ABC 123        $1.20
+    TEST:DEF 123"#,
+        )
+        .expect("parsing test transaction");
+
+        let mut buf = Vec::new();
+        ledger
+            .write(&mut buf, &SerializerSettings::default())
+            .expect("serializing test transaction");
+
+        assert_eq!(
+            String::from_utf8(buf).unwrap(),
+            r#"2018-10-01 (123) Payee 123
+  TEST:ABC 123  $1.20
+  TEST:DEF 123
+"#
+        );
+    }
+
+    #[test]
+    fn serialize_with_custom_date_format() {
+        let ledger = crate::parse(
+            r#"2018-10-01    (123)     Payee 123
+  TEST:ABC 123        $1.20
+    TEST:DEF 123"#,
+        )
+        .expect("parsing test transaction");
+
+        let mut buf = Vec::new();
+        ledger
+            .write(
+                &mut buf,
+                &SerializerSettings {
+                    transaction_date_format: "%Y/%m/%d".to_owned(),
+                    ..SerializerSettings::default()
+                },
+            )
+            .expect("serializing test transaction");
+
+        assert_eq!(
+            String::from_utf8(buf).unwrap(),
+            r#"2018/10/01 (123) Payee 123
+  TEST:ABC 123  $1.20
+  TEST:DEF 123
+"#
+        );
+    }
+
+    #[test]
+    fn serialize_tags() {
+        let ledger = crate::parse(
+            r#"2018-10-01   (123)    Payee 123
+  ;   Tag1:   Foo bar
+  TEST:ABC 123       $1.20      ;   Tag2:  Fizz bazz
+  TEST:DEF 123"#,
+        )
+        .expect("parsing test transaction");
+
+        let mut buf = Vec::new();
+        ledger
+            .write(&mut buf, &SerializerSettings::default())
+            .expect("serializing test transaction");
+
+        assert_eq!(
+            String::from_utf8(buf).unwrap(),
+            r#"2018-10-01 (123) Payee 123
+  ; Tag1: Foo bar
+  TEST:ABC 123  $1.20  ; Tag2: Fizz bazz
+  TEST:DEF 123
+"#
+        );
+    }
+
+    #[test]
+    fn serialize_posting_comments_sameline() {
+        let ledger = crate::parse(
+            r#"2018-10-01 Payee 123
+  TEST:ABC 123  $1.20
+  ; This is a one-line comment
+  TEST:DEF 123
+  ; This is a two-
+  ; line comment"#,
+        )
+        .expect("parsing test transaction");
+
+        let mut buf = Vec::new();
+        ledger
+            .write(
+                &mut buf,
+                &SerializerSettings {
+                    posting_comments_sameline: true,
+                    ..SerializerSettings::default()
+                },
+            )
+            .expect("serializing test transaction");
+
+        assert_eq!(
+            String::from_utf8(buf).unwrap(),
+            r#"2018-10-01 Payee 123
+  TEST:ABC 123  $1.20  ; This is a one-line comment
+  TEST:DEF 123
+  ; This is a two-
+  ; line comment
+"#
+        );
     }
 }

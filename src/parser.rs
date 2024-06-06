@@ -500,7 +500,7 @@ fn parse_transaction(input: &str) -> LedgerParseResult<Transaction> {
         space1,
         delimited(char('('), is_not(")"), char(')')),
     ))(input)?;
-    let (input, description) = preceded(space1, parse_payee)(input)?;
+    let (input, description) = opt(preceded(space1, parse_payee))(input)?;
 
     let (
         input,
@@ -521,7 +521,7 @@ fn parse_transaction(input: &str) -> LedgerParseResult<Transaction> {
             effective_date,
             status,
             code: code.map(str::to_owned),
-            description: description.to_owned(),
+            description: description.map(str::to_owned),
             posting_metadata: PostingMetadata {
                 date: posting_date,
                 effective_date: posting_effective_date,
@@ -1475,7 +1475,7 @@ mod tests {
                     },
                     status: Some(TransactionStatus::Pending),
                     code: Some("123".to_owned()),
-                    description: "Marek Ogarek".to_owned(),
+                    description: Some("Marek Ogarek".to_owned()),
                     postings: vec![
                         Posting {
                             account: "TEST:ABC 123".to_owned(),
@@ -1548,7 +1548,7 @@ mod tests {
                     },
                     status: None,
                     code: None,
-                    description: "Marek Ogarek ; one space".to_owned(),
+                    description: Some("Marek Ogarek ; one space".to_owned()),
                     postings: vec![
                         Posting {
                             account: "TEST:ABC 123".to_owned(),
@@ -1655,7 +1655,7 @@ mod tests {
                     },
                     status: Some(TransactionStatus::Pending),
                     code: Some("123".to_owned()),
-                    description: "Marek Ogarek  two spaces".to_owned(),
+                    description: Some("Marek Ogarek  two spaces".to_owned()),
                     postings: vec![
                         Posting {
                             account: "TEST:ABC 123".to_owned(),
@@ -1674,6 +1674,69 @@ mod tests {
                             balance: None,
                             status: None,
                             comment: Some("test".to_owned()),
+                            metadata: PostingMetadata {
+                                date: None,
+                                effective_date: None,
+                                tags: vec![],
+                            },
+                        },
+                        Posting {
+                            account: "TEST:DEF 123".to_owned(),
+                            reality: Reality::Real,
+                            amount: None,
+                            balance: None,
+                            status: None,
+                            comment: None,
+                            metadata: PostingMetadata {
+                                date: None,
+                                effective_date: None,
+                                tags: vec![],
+                            },
+                        },
+                    ]
+                }
+            ))
+        );
+
+        // same transaction, but no payee/description (these are optional in ledger)
+        assert_eq!(
+            parse_transaction(
+                r#"2018-10-01=2018-10-14 ! (123)
+ TEST:ABC 123  $1.20
+ TEST:DEF 123"#
+            ),
+            Ok((
+                "",
+                Transaction {
+                    comment: None,
+                    date: NaiveDate::from_ymd_opt(2018, 10, 1).unwrap(),
+                    effective_date: Some(NaiveDate::from_ymd_opt(2018, 10, 14).unwrap()),
+                    posting_metadata: PostingMetadata {
+                        date: None,
+                        effective_date: None,
+                        tags: vec![],
+                    },
+                    status: Some(TransactionStatus::Pending),
+                    code: Some("123".to_owned()),
+                    description: None,
+                    postings: vec![
+                        Posting {
+                            account: "TEST:ABC 123".to_owned(),
+                            reality: Reality::Real,
+                            amount: Some(PostingAmount {
+                                amount: Amount {
+                                    quantity: Decimal::new(120, 2),
+                                    commodity: Commodity {
+                                        name: "$".to_owned(),
+                                        position: CommodityPosition::Left
+                                    }
+                                },
+                                lot_price: None,
+                                price: None
+                            }),
+                            balance: None,
+                            status: None,
+                            comment: None,
                             metadata: PostingMetadata {
                                 date: None,
                                 effective_date: None,
