@@ -15,12 +15,12 @@ pub struct SerializerSettings {
 
 impl SerializerSettings {
     pub fn with_indent(mut self, indent: &str) -> Self {
-        self.indent = indent.to_owned();
+        indent.clone_into(&mut self.indent);
         self
     }
 
     pub fn with_eol(mut self, eol: &str) -> Self {
-        self.eol = eol.to_owned();
+        eol.clone_into(&mut self.eol);
         self
     }
 }
