@@ -1,11 +1,11 @@
 # Changelog
 
-## [Unreleased]
+## [7.0.0] - 2024-06-06
 
-- Payees/descriptions are optional (improves Ledger compatiblity)
-- Support custom date formats during serialization
-- Support metadata tags during serialization
-- Support single-line posting comments at the of the posting line during serialization
+- Payees/descriptions are optional (improves Ledger compatiblity, thanks to Clayton Carter)
+- Support custom date formats during serialization (thanks to Clayton Carter)
+- Support metadata tags during serialization (thanks to Clayton Carter)
+- Support single-line posting comments at the of the posting line during serialization (thanks to Clayton Carter)
 
 ## [6.0.0] - 2024-02-26
 
