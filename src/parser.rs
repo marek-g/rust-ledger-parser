@@ -2,9 +2,7 @@ use chrono::{NaiveDate, NaiveDateTime};
 use nom::{
     branch::alt,
     bytes::complete::{is_not, tag, take_while1, take_while_m_n},
-    character::complete::{
-        alphanumeric1, char, digit0, digit1, line_ending, none_of, not_line_ending, space0, space1,
-    },
+    character::complete::{char, digit0, digit1, line_ending, not_line_ending, space0, space1},
     combinator::{eof, map, map_opt, map_res, not, opt, peek, recognize, value, verify},
     error::VerboseError,
     multi::{fold_many0, fold_many1, many0, many1, separated_list1},
@@ -258,6 +256,41 @@ fn parse_metadata_date(input: &str) -> LedgerParseResult<Metadata> {
     )(input)
 }
 
+///
+/// Characters a whitespace delimited token, i.e. a comment word or a tag name, is made of.
+/// Ledger-cli splits comments into tokens separated by spaces or tabs, so anything but these
+/// and line endings is allowed.
+///
+fn is_token_char(c: char) -> bool {
+    !matches!(c, ' ' | '\t' | '\r' | '\n')
+}
+
+///
+/// Ledger-cli accepts any character in a tag name, as a name is simply everything it finds
+/// before the first space or tab. Only the characters delimiting names are excluded: token
+/// characters and `:`, which separates tags from each other and a tag from its value.
+///
+fn is_tag_name_char(c: char) -> bool {
+    is_token_char(c) && c != ':'
+}
+
+fn parse_tag_name(input: &str) -> LedgerParseResult<&str> {
+    take_while1(is_tag_name_char)(input)
+}
+
+fn parse_token(input: &str) -> LedgerParseResult<&str> {
+    take_while1(is_token_char)(input)
+}
+
+///
+/// Skips whitespace and any additional `;` characters preceding a tag. Ledger-cli strips them
+/// before looking for the tag name, so comments written as `;;Tag: value` do not produce
+/// a tag named `;Tag`.
+///
+fn parse_tag_prefix(input: &str) -> LedgerParseResult<()> {
+    value((), many0(alt((space1, tag(";")))))(input)
+}
+
 fn parse_tag_value(input: &str) -> LedgerParseResult<TagValue> {
     alt((
         map_res(
@@ -273,15 +306,15 @@ fn parse_tag_value(input: &str) -> LedgerParseResult<TagValue> {
 fn parse_metadata_tag_with_value(input: &str) -> LedgerParseResult<Metadata> {
     map(
         preceded(
-            space0,
+            parse_tag_prefix,
             alt((
                 pair(
-                    terminated(alphanumeric1, pair(char(':'), space1)),
+                    terminated(parse_tag_name, pair(char(':'), space1)),
                     not_line_ending.map(str::trim_end),
                 )
                 .map(|(name, value)| (name, TagValue::String(value.to_owned()))),
                 pair(
-                    terminated(alphanumeric1, pair(tag("::"), space1)),
+                    terminated(parse_tag_name, pair(tag("::"), space1)),
                     parse_tag_value,
                 ),
             )),
@@ -296,27 +329,42 @@ fn parse_metadata_tag_with_value(input: &str) -> LedgerParseResult<Metadata> {
     )(input)
 }
 
+///
+/// Parses a `:TAG1:TAG2:` series of tags. Ledger-cli looks for tags in whole comment tokens
+/// only (it splits comments into tokens separated by spaces or tabs), so a series has to be
+/// followed by whitespace or the end of the line and text such as `:tag:extra` stays
+/// a part of the comment.
+///
 fn parse_tags(input: &str) -> LedgerParseResult<Vec<Tag>> {
-    delimited(
-        char(':'),
-        separated_list1(
+    terminated(
+        delimited(
             char(':'),
-            alphanumeric1
-                .map(str::to_owned)
-                .map(|name| Tag { name, value: None }),
+            separated_list1(
+                char(':'),
+                parse_tag_name
+                    .map(str::to_owned)
+                    .map(|name| Tag { name, value: None }),
+            ),
+            char(':'),
         ),
-        char(':'),
+        peek(alt((space1, eol_or_eof))),
     )(input)
 }
 
+///
+/// Parses a comment, which may contain a `:TAG1:TAG2:` series of tags. It is scanned token by
+/// token, because ledger-cli separates tags from the comment text using spaces and tabs, so
+/// text like `a:b:` or `http://example.com/tag: value` is not mistaken for tags.
+///
 fn parse_comment_with_tags(input: &str) -> LedgerParseResult<Metadata> {
     map(
         preceded(
             space0,
             tuple((
-                opt(recognize(many1(
-                    none_of(":\r\n").or(not(parse_tags).and(char(':')).map(|(_, c)| c)),
-                ))
+                opt(verify(
+                    recognize(many0(pair(not(parse_tags).and(parse_token), space0))),
+                    |s: &str| !s.is_empty(),
+                )
                 .map(str::trim_end)),
                 opt(parse_tags),
                 opt(verify(not_line_ending.map(str::trim), |s: &str| {
@@ -1450,6 +1498,172 @@ mod tests {
                     },
                 }
             ))
+        );
+    }
+
+    /// Parses a posting line, which is expected to be valid, and returns the posting.
+    fn parsed_posting(input: &str) -> Posting {
+        let (rest, posting) = parse_posting(input).unwrap();
+        assert_eq!(rest, "");
+        posting
+    }
+
+    /// Parses a posting line, which is expected to be valid, and returns its metadata tags.
+    fn parsed_posting_tags(input: &str) -> Vec<Tag> {
+        parsed_posting(input).metadata.tags
+    }
+
+    fn tag_without_value(name: &str) -> Tag {
+        Tag {
+            name: name.to_owned(),
+            value: None,
+        }
+    }
+
+    fn string_tag(name: &str, value: &str) -> Tag {
+        Tag {
+            name: name.to_owned(),
+            value: Some(TagValue::String(value.to_owned())),
+        }
+    }
+
+    #[test]
+    fn parse_tags_test() {
+        assert_eq!(
+            parse_tags(":alphanum1:with-hyphen:with.dot:with_underscore:"),
+            Ok((
+                "",
+                vec![
+                    tag_without_value("alphanum1"),
+                    tag_without_value("with-hyphen"),
+                    tag_without_value("with.dot"),
+                    tag_without_value("with_underscore"),
+                ]
+            ))
+        );
+        // Spaces and tabs end a tag name, so they cannot be a part of it
+        assert!(parse_tags(":with space:").is_err());
+        assert!(parse_tags(":with\ttab:").is_err());
+        // A series is a whole token, it never ends in the middle of one
+        assert!(parse_tags(":tag:extra text").is_err());
+        assert!(parse_tags(":tag:extra\ntext").is_err());
+    }
+
+    #[test]
+    fn parse_metadata_tag_names_test() {
+        // Ledger-cli takes everything up to the first space or tab as a tag name, so tag
+        // names are not limited to alphanumerics
+        assert_eq!(
+            parsed_posting_tags(" TEST:ABC 123  ; :alphanum1:with-hyphen:with.dot:"),
+            vec![
+                tag_without_value("alphanum1"),
+                tag_without_value("with-hyphen"),
+                tag_without_value("with.dot"),
+            ]
+        );
+        assert_eq!(
+            parsed_posting_tags(" TEST:ABC 123  ; keyalphanum1: alphanum1 afterspace"),
+            vec![string_tag("keyalphanum1", "alphanum1 afterspace")]
+        );
+        assert_eq!(
+            parsed_posting_tags(" TEST:ABC 123  ; key-with-hyphen: with hyphen"),
+            vec![string_tag("key-with-hyphen", "with hyphen")]
+        );
+        assert_eq!(
+            parsed_posting_tags(" TEST:ABC 123  ; key.with.dot: with dot"),
+            vec![string_tag("key.with.dot", "with dot")]
+        );
+        assert_eq!(
+            parsed_posting_tags(" TEST:ABC 123  ; key_with_underscore: with underscore"),
+            vec![string_tag("key_with_underscore", "with underscore")]
+        );
+        assert_eq!(
+            parsed_posting_tags(" TEST:ABC 123  ; key-with-hyphen:: -1"),
+            vec![Tag {
+                name: "key-with-hyphen".to_owned(),
+                value: Some(TagValue::Integer(-1)),
+            }]
+        );
+        assert_eq!(
+            parsed_posting_tags(" TEST:ABC 123  ; key.with.dot:: [2018-01-05]"),
+            vec![Tag {
+                name: "key.with.dot".to_owned(),
+                value: Some(TagValue::Date(NaiveDate::from_ymd_opt(2018, 1, 5).unwrap())),
+            }]
+        );
+
+        // Additional ';' characters preceding a tag are skipped, they are not a part of the name
+        assert_eq!(
+            parsed_posting_tags(" TEST:ABC 123  ;;key-with-hyphen: with hyphen"),
+            vec![string_tag("key-with-hyphen", "with hyphen")]
+        );
+        assert_eq!(
+            parsed_posting_tags(" TEST:ABC 123  ; ;  ;key.with.dot: with dot"),
+            vec![string_tag("key.with.dot", "with dot")]
+        );
+
+        // A space or a tab cannot be a part of a tag name, such comments are kept as
+        // plain comments. The same applies to text which just looks like a series of tags:
+        // ledger-cli splits comments into tokens separated by whitespace and a tag series
+        // has to be a whole token.
+        for comment in [
+            ":with space:",
+            "key with space: with space",
+            "a:b: value",
+            "12:30: meeting",
+            ":tag:extra",
+            "see http://example.com/tag: value",
+        ] {
+            let posting = parsed_posting(&format!(" TEST:ABC 123  ; {comment}"));
+            assert!(
+                posting.metadata.tags.is_empty(),
+                "unexpected tags for comment {comment:?}"
+            );
+            assert_eq!(posting.comment, Some(comment.to_owned()));
+        }
+    }
+
+    #[test]
+    fn parse_transaction_metadata_tags_test() {
+        let ledger = parse_ledger(
+            r#"2020-01-01 Description
+  ; :alphanum1:
+  ; :with-hyphen:
+  ; :with.dot:
+  ; :with_underscore:
+  ; :with space:
+  ; keyalphanum1: alphanum1 afterspace
+  ; key-with-hyphen: with hyphen
+  ; key.with.dot: with dot
+  ; key_with_underscore: with underscore
+  ; key with space: with space
+  expenses:dummy  $1
+  income:dummy  -$1
+"#,
+        )
+        .unwrap()
+        .1;
+
+        let transaction = match &ledger.items[0] {
+            LedgerItem::Transaction(transaction) => transaction,
+            other => panic!("expected a transaction, got {other:?}"),
+        };
+        assert_eq!(
+            transaction.posting_metadata.tags,
+            vec![
+                tag_without_value("alphanum1"),
+                tag_without_value("with-hyphen"),
+                tag_without_value("with.dot"),
+                tag_without_value("with_underscore"),
+                string_tag("keyalphanum1", "alphanum1 afterspace"),
+                string_tag("key-with-hyphen", "with hyphen"),
+                string_tag("key.with.dot", "with dot"),
+                string_tag("key_with_underscore", "with underscore"),
+            ]
+        );
+        assert_eq!(
+            transaction.comment,
+            Some(":with space:\nkey with space: with space".to_owned())
         );
     }
 

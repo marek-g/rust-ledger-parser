@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+- Accept non-alphanumeric characters in tag names (thanks to John Beisley)
+
 ## [7.0.0] - 2024-06-06
 
 - Payees/descriptions are optional (improves Ledger compatiblity, thanks to Clayton Carter)
@@ -63,14 +67,14 @@
 ### Added
 
 - Support for optional `amounts` (thanks to Emmanuel Surleau)
-- Support for `balance` assertion field in posting (thanks to John Beisle)
+- Support for `balance` assertion field in posting (thanks to John Beisley)
 
 ### Changed
 
 - Update rust_decimal crate
 - Support for `,` as thousands separator (thanks to Emmanuel Surleau)
 - Support for commodities starting with a non-ASCII character (thanks to Emmanuel Surleau)
-- Fix model::Posting not displaying its status (thanks to John Beisle)
+- Fix model::Posting not displaying its status (thanks to John Beisley)
 
 ## [2.2.0] - 2019-02-17
 
