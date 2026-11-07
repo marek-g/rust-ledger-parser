@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 - Upgrade nom to v8 (requires the new `nom-language` dependency for detailed error messages)
+- Transition to Rust 2024 edition
 - Accept non-alphanumeric characters in tag names (thanks to John Beisley)
 
 ## [7.0.0] - 2024-06-06

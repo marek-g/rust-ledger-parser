@@ -1,13 +1,13 @@
 use chrono::{NaiveDate, NaiveDateTime};
 use nom::{
+    AsChar, Err, IResult, Needed, Parser,
     branch::alt,
-    bytes::complete::{is_not, tag, take_while1, take_while_m_n},
+    bytes::complete::{is_not, tag, take_while_m_n, take_while1},
     character::complete::{char, digit0, digit1, line_ending, not_line_ending, space0, space1},
     combinator::{eof, map, map_opt, map_res, not, opt, peek, recognize, value, verify},
     multi::{fold_many0, fold_many1, many0, many1, separated_list1},
     number::complete::double,
     sequence::{delimited, pair, preceded, separated_pair, terminated},
-    AsChar, Err, IResult, Needed, Parser,
 };
 use nom_language::error::VerboseError;
 use ordered_float::NotNan;
@@ -491,16 +491,16 @@ fn take_until_hard_separator(input: &str) -> LedgerParseResult<'_, &str> {
 fn parse_account(input: &str) -> LedgerParseResult<'_, (&str, Reality)> {
     let (input, name) = take_until_hard_separator(input)?;
 
-    if let Some(n1) = name.strip_prefix('[') {
-        if let Some(n2) = n1.strip_suffix(']') {
-            return Ok((input, (n2, Reality::BalancedVirtual)));
-        }
+    if let Some(n1) = name.strip_prefix('[')
+        && let Some(n2) = n1.strip_suffix(']')
+    {
+        return Ok((input, (n2, Reality::BalancedVirtual)));
     }
 
-    if let Some(n1) = name.strip_prefix('(') {
-        if let Some(n2) = n1.strip_suffix(')') {
-            return Ok((input, (n2, Reality::UnbalancedVirtual)));
-        }
+    if let Some(n1) = name.strip_prefix('(')
+        && let Some(n2) = n1.strip_suffix(')')
+    {
+        return Ok((input, (n2, Reality::UnbalancedVirtual)));
     }
 
     Ok((input, (name, Reality::Real)))
@@ -629,8 +629,8 @@ pub fn parse_ledger(input: &str) -> LedgerParseResult<'_, Ledger> {
 mod tests {
     use super::*;
     use nom::{
-        error::{ErrorKind, ParseError},
         Err::Error,
+        error::{ErrorKind, ParseError},
     };
 
     #[test]

@@ -1,6 +1,6 @@
+use crate::ParseError;
 use crate::parser;
 use crate::serializer::*;
-use crate::ParseError;
 use chrono::{NaiveDate, NaiveDateTime};
 use nom::Finish;
 use nom_language::error::convert_error;

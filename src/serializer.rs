@@ -112,10 +112,10 @@ impl Serializer for Transaction {
         }
 
         // for the None case, ledger would print "<Unspecified payee>"
-        if let Some(ref description) = self.description {
-            if !description.is_empty() {
-                write!(writer, " {}", description)?;
-            }
+        if let Some(ref description) = self.description
+            && !description.is_empty()
+        {
+            write!(writer, " {}", description)?;
         }
 
         if let Some(ref comment) = self.comment {
@@ -260,7 +260,7 @@ impl Serializer for Balance {
     {
         match self {
             Balance::Zero => write!(writer, "0"),
-            Balance::Amount(ref balance) => balance.write(writer, settings),
+            Balance::Amount(balance) => balance.write(writer, settings),
         }
     }
 }
