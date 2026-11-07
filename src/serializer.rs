@@ -45,7 +45,7 @@ pub trait Serializer {
     fn to_string_pretty(&self, settings: &SerializerSettings) -> String {
         let mut res = Vec::new();
         self.write(&mut res, settings).unwrap();
-        return std::str::from_utf8(&res).unwrap().to_owned();
+        std::str::from_utf8(&res).unwrap().to_owned()
     }
 }
 
