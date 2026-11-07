@@ -4,12 +4,12 @@ use nom::{
     bytes::complete::{is_not, tag, take_while1, take_while_m_n},
     character::complete::{char, digit0, digit1, line_ending, not_line_ending, space0, space1},
     combinator::{eof, map, map_opt, map_res, not, opt, peek, recognize, value, verify},
-    error::VerboseError,
     multi::{fold_many0, fold_many1, many0, many1, separated_list1},
     number::complete::double,
-    sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
+    sequence::{delimited, pair, preceded, separated_pair, terminated},
     AsChar, Err, IResult, Needed, Parser,
 };
+use nom_language::error::VerboseError;
 use ordered_float::NotNan;
 use rust_decimal::Decimal;
 use std::str::FromStr;
@@ -23,27 +23,29 @@ fn is_commodity_char(c: char) -> bool {
 }
 
 fn eol_or_eof(input: &str) -> LedgerParseResult<'_, &str> {
-    alt((line_ending, eof))(input)
+    alt((line_ending, eof)).parse(input)
 }
 
-fn number_n<'a>(n: usize) -> impl FnMut(&'a str) -> IResult<&'a str, i32, VerboseError<&str>> {
+fn number_n<'a>(n: usize) -> impl Parser<&'a str, Output = i32, Error = VerboseError<&'a str>> {
     map_res(take_while_m_n(n, n, AsChar::is_dec_digit), i32::from_str)
 }
 
 fn parse_date_internal(input: &str) -> LedgerParseResult<'_, (i32, i32, i32)> {
-    tuple((
+    (
         terminated(number_n(4), alt((char('-'), char('/'), char('.')))),
         terminated(number_n(2), alt((char('-'), char('/'), char('.')))),
         number_n(2),
-    ))(input)
+    )
+        .parse(input)
 }
 
 fn parse_time_internal(input: &str) -> LedgerParseResult<'_, (i32, i32, i32)> {
-    tuple((
+    (
         terminated(number_n(2), char(':')),
         terminated(number_n(2), char(':')),
         number_n(2),
-    ))(input)
+    )
+        .parse(input)
 }
 
 fn parse_datetime_internal(input: &str) -> LedgerParseResult<'_, (i32, i32, i32, i32, i32, i32)> {
@@ -55,7 +57,8 @@ fn parse_datetime_internal(input: &str) -> LedgerParseResult<'_, (i32, i32, i32,
 fn parse_date(input: &str) -> LedgerParseResult<'_, NaiveDate> {
     map_opt(parse_date_internal, |value| {
         NaiveDate::from_ymd_opt(value.0, value.1 as u32, value.2 as u32)
-    })(input)
+    })
+    .parse(input)
 }
 
 fn parse_datetime(input: &str) -> LedgerParseResult<'_, NaiveDateTime> {
@@ -65,12 +68,13 @@ fn parse_datetime(input: &str) -> LedgerParseResult<'_, NaiveDateTime> {
             Some(date) => date.and_hms_opt(value.3 as u32, value.4 as u32, value.5 as u32),
             None => None,
         },
-    )(input)
+    )
+    .parse(input)
 }
 
 fn parse_quantity(input: &str) -> LedgerParseResult<'_, Decimal> {
     map_res(
-        tuple((
+        (
             opt(tag("-")),
             alt((
                 pair(
@@ -84,24 +88,26 @@ fn parse_quantity(input: &str) -> LedgerParseResult<'_, Decimal> {
                 digit0.map(str::to_owned),
             )),
             opt(recognize(preceded(char('.'), digit1))),
-        ))
-        .map(|(sign, decimal, fractional)| {
-            format!(
-                "{}{}{}",
-                sign.unwrap_or(""),
-                decimal,
-                fractional.unwrap_or("")
-            )
-        }),
+        )
+            .map(|(sign, decimal, fractional)| {
+                format!(
+                    "{}{}{}",
+                    sign.unwrap_or(""),
+                    decimal,
+                    fractional.unwrap_or("")
+                )
+            }),
         |s: String| Decimal::from_str(&s),
-    )(input)
+    )
+    .parse(input)
 }
 
 fn string_fragment(input: &str) -> LedgerParseResult<'_, &str> {
     alt((
         verify(is_not("\\\""), |s: &str| !s.is_empty()),
         value("\"", tag("\\\"")),
-    ))(input)
+    ))
+    .parse(input)
 }
 
 fn string_between_quotes(input: &str) -> LedgerParseResult<'_, String> {
@@ -110,7 +116,7 @@ fn string_between_quotes(input: &str) -> LedgerParseResult<'_, String> {
         string
     });
 
-    delimited(char('"'), string_contents, char('"'))(input)
+    delimited(char('"'), string_contents, char('"')).parse(input)
 }
 
 fn commodity_without_quotes(input: &str) -> LedgerParseResult<'_, String> {
@@ -120,27 +126,27 @@ fn commodity_without_quotes(input: &str) -> LedgerParseResult<'_, String> {
 }
 
 fn parse_commodity(input: &str) -> LedgerParseResult<'_, String> {
-    alt((string_between_quotes, commodity_without_quotes))(input)
+    alt((string_between_quotes, commodity_without_quotes)).parse(input)
 }
 
 fn parse_amount(input: &str) -> LedgerParseResult<'_, Amount> {
     alt((
-        tuple((
+        (
             opt(terminated(char('-'), space0)),
             terminated(parse_commodity, space0),
             parse_quantity,
-        ))
-        .map(|(neg_opt, name, quantity)| Amount {
-            quantity: if neg_opt.is_some() {
-                quantity * Decimal::new(-1, 0)
-            } else {
-                quantity
-            },
-            commodity: Commodity {
-                name,
-                position: CommodityPosition::Left,
-            },
-        }),
+        )
+            .map(|(neg_opt, name, quantity)| Amount {
+                quantity: if neg_opt.is_some() {
+                    quantity * Decimal::new(-1, 0)
+                } else {
+                    quantity
+                },
+                commodity: Commodity {
+                    name,
+                    position: CommodityPosition::Left,
+                },
+            }),
         pair(terminated(parse_quantity, space0), parse_commodity).map(|(quantity, name)| Amount {
             quantity,
             commodity: Commodity {
@@ -148,13 +154,14 @@ fn parse_amount(input: &str) -> LedgerParseResult<'_, Amount> {
                 position: CommodityPosition::Right,
             },
         }),
-    ))(input)
+    ))
+    .parse(input)
 }
 
 fn parse_posting_amount(input: &str) -> LedgerParseResult<'_, PostingAmount> {
     let (input, amount) = parse_amount(input)?;
-    let (input, lot_price) = opt(preceded(space0, parse_lot_price))(input)?;
-    let (input, price) = opt(preceded(space0, parse_price))(input)?;
+    let (input, lot_price) = opt(preceded(space0, parse_lot_price)).parse(input)?;
+    let (input, price) = opt(preceded(space0, parse_price)).parse(input)?;
     Ok((
         input,
         PostingAmount {
@@ -179,29 +186,32 @@ fn parse_lot_price(input: &str) -> LedgerParseResult<'_, Price> {
             pair(space0, char('}')),
         )
         .map(Price::Unit),
-    ))(input)
+    ))
+    .parse(input)
 }
 
 fn parse_price(input: &str) -> LedgerParseResult<'_, Price> {
     alt((
         preceded(pair(tag("@@"), space0), parse_amount).map(Price::Total),
         preceded(pair(char('@'), space0), parse_amount).map(Price::Unit),
-    ))(input)
+    ))
+    .parse(input)
 }
 
 fn parse_balance(input: &str) -> LedgerParseResult<'_, Balance> {
     alt((
         parse_amount.map(Balance::Amount),
         value(Balance::Zero, char('0')),
-    ))(input)
+    ))
+    .parse(input)
 }
 
 fn parse_commodity_price(input: &str) -> LedgerParseResult<'_, CommodityPrice> {
-    let (input, _) = char('P')(input)?;
-    let (input, datetime) = preceded(space1, parse_datetime)(input)?;
-    let (input, commodity_name) = preceded(space1, parse_commodity)(input)?;
-    let (input, amount) = preceded(space1, parse_amount)(input)?;
-    let (input, _) = preceded(space0, opt(preceded(char(';'), not_line_ending)))(input)?;
+    let (input, _) = char('P').parse(input)?;
+    let (input, datetime) = preceded(space1, parse_datetime).parse(input)?;
+    let (input, commodity_name) = preceded(space1, parse_commodity).parse(input)?;
+    let (input, amount) = preceded(space1, parse_amount).parse(input)?;
+    let (input, _) = preceded(space0, opt(preceded(char(';'), not_line_ending))).parse(input)?;
     let (input, _) = eol_or_eof(input)?;
 
     Ok((
@@ -218,7 +228,8 @@ fn parse_empty_line(input: &str) -> LedgerParseResult<'_, &str> {
     alt((
         terminated(space0, line_ending),
         terminated(space1, eof), // Must consume something or many0 errors to prevent infinite loop
-    ))(input)
+    ))
+    .parse(input)
 }
 
 fn parse_global_line_comment(input: &str) -> LedgerParseResult<'_, &str> {
@@ -226,8 +237,9 @@ fn parse_global_line_comment(input: &str) -> LedgerParseResult<'_, &str> {
         space0,
         alt((char(';'), char('#'), char('%'), char('|'), char('*'))),
         space0,
-    )(input)?;
-    terminated(not_line_ending.map(str::trim_end), eol_or_eof)(input)
+    )
+    .parse(input)?;
+    terminated(not_line_ending.map(str::trim_end), eol_or_eof).parse(input)
 }
 
 #[derive(Default)]
@@ -253,7 +265,8 @@ fn parse_metadata_date(input: &str) -> LedgerParseResult<'_, Metadata> {
             effective_date,
             ..Default::default()
         },
-    )(input)
+    )
+    .parse(input)
 }
 
 ///
@@ -275,11 +288,11 @@ fn is_tag_name_char(c: char) -> bool {
 }
 
 fn parse_tag_name(input: &str) -> LedgerParseResult<'_, &str> {
-    take_while1(is_tag_name_char)(input)
+    take_while1(is_tag_name_char).parse(input)
 }
 
 fn parse_token(input: &str) -> LedgerParseResult<'_, &str> {
-    take_while1(is_token_char)(input)
+    take_while1(is_token_char).parse(input)
 }
 
 ///
@@ -288,7 +301,7 @@ fn parse_token(input: &str) -> LedgerParseResult<'_, &str> {
 /// a tag named `;Tag`.
 ///
 fn parse_tag_prefix(input: &str) -> LedgerParseResult<'_, ()> {
-    value((), many0(alt((space1, tag(";")))))(input)
+    value((), many0(alt((space1, tag(";"))))).parse(input)
 }
 
 fn parse_tag_value(input: &str) -> LedgerParseResult<'_, TagValue> {
@@ -300,7 +313,8 @@ fn parse_tag_value(input: &str) -> LedgerParseResult<'_, TagValue> {
         .map(TagValue::Integer),
         map_res(double, NotNan::new).map(TagValue::Float),
         delimited(char('['), parse_date, char(']')).map(TagValue::Date),
-    ))(input)
+    ))
+    .parse(input)
 }
 
 fn parse_metadata_tag_with_value(input: &str) -> LedgerParseResult<'_, Metadata> {
@@ -326,7 +340,8 @@ fn parse_metadata_tag_with_value(input: &str) -> LedgerParseResult<'_, Metadata>
             }],
             ..Default::default()
         },
-    )(input)
+    )
+    .parse(input)
 }
 
 ///
@@ -348,7 +363,8 @@ fn parse_tags(input: &str) -> LedgerParseResult<'_, Vec<Tag>> {
             char(':'),
         ),
         peek(alt((space1, eol_or_eof))),
-    )(input)
+    )
+    .parse(input)
 }
 
 ///
@@ -360,7 +376,7 @@ fn parse_comment_with_tags(input: &str) -> LedgerParseResult<'_, Metadata> {
     map(
         preceded(
             space0,
-            tuple((
+            (
                 opt(verify(
                     recognize(many0(pair(not(parse_tags).and(parse_token), space0))),
                     |s: &str| !s.is_empty(),
@@ -370,7 +386,7 @@ fn parse_comment_with_tags(input: &str) -> LedgerParseResult<'_, Metadata> {
                 opt(verify(not_line_ending.map(str::trim), |s: &str| {
                     !s.is_empty()
                 })),
-            )),
+            ),
         ),
         |(s1, v, s2)| Metadata {
             comment: s1
@@ -385,7 +401,8 @@ fn parse_comment_with_tags(input: &str) -> LedgerParseResult<'_, Metadata> {
             tags: v.unwrap_or_default(),
             ..Default::default()
         },
-    )(input)
+    )
+    .parse(input)
 }
 
 fn parse_metadata_comments(input: &str) -> LedgerParseResult<'_, Metadata> {
@@ -423,15 +440,17 @@ fn parse_metadata_comments(input: &str) -> LedgerParseResult<'_, Metadata> {
             },
         ),
         preceded(space0, eol_or_eof),
-    )(input)
+    )
+    .parse(input)
 }
 
 fn parse_include_file(input: &str) -> LedgerParseResult<'_, &str> {
-    let (input, _) = delimited(space0, tag("include"), space1)(input)?;
+    let (input, _) = delimited(space0, tag("include"), space1).parse(input)?;
     verify(
         terminated(not_line_ending, eol_or_eof).map(str::trim_end),
         |s: &str| !s.is_empty(),
-    )(input)
+    )
+    .parse(input)
 }
 
 fn take_until_hard_separator(input: &str) -> LedgerParseResult<'_, &str> {
@@ -491,19 +510,21 @@ fn parse_transaction_status(input: &str) -> LedgerParseResult<'_, TransactionSta
     alt((
         value(TransactionStatus::Cleared, char('*')),
         value(TransactionStatus::Pending, char('!')),
-    ))(input)
+    ))
+    .parse(input)
 }
 
 fn parse_posting(input: &str) -> LedgerParseResult<'_, Posting> {
     let (input, _) = space1(input)?;
-    let (input, status) = opt(parse_transaction_status)(input)?;
+    let (input, status) = opt(parse_transaction_status).parse(input)?;
     let (input, _) = space0(input)?;
     let (input, (account, reality)) = parse_account(input)?;
-    let (input, amount) = opt(preceded(space0, parse_posting_amount))(input)?;
+    let (input, amount) = opt(preceded(space0, parse_posting_amount)).parse(input)?;
     let (input, balance) = opt(preceded(
         delimited(space0, char('='), space0),
         parse_balance,
-    ))(input)?;
+    ))
+    .parse(input)?;
 
     let (
         input,
@@ -537,18 +558,20 @@ fn parse_payee(input: &str) -> LedgerParseResult<'_, &str> {
     alt((
         terminated(take_until_hard_separator, peek(pair(space1, char(';')))),
         not_line_ending,
-    ))(input)
+    ))
+    .parse(input)
 }
 
 fn parse_transaction(input: &str) -> LedgerParseResult<'_, Transaction> {
     let (input, date) = parse_date(input)?;
-    let (input, effective_date) = opt(preceded(char('='), parse_date))(input)?;
-    let (input, status) = opt(preceded(space1, parse_transaction_status))(input)?;
+    let (input, effective_date) = opt(preceded(char('='), parse_date)).parse(input)?;
+    let (input, status) = opt(preceded(space1, parse_transaction_status)).parse(input)?;
     let (input, code) = opt(preceded(
         space1,
         delimited(char('('), is_not(")"), char(')')),
-    ))(input)?;
-    let (input, description) = opt(preceded(space1, parse_payee))(input)?;
+    ))
+    .parse(input)?;
+    let (input, description) = opt(preceded(space1, parse_payee)).parse(input)?;
 
     let (
         input,
@@ -559,7 +582,7 @@ fn parse_transaction(input: &str) -> LedgerParseResult<'_, Transaction> {
             tags,
         },
     ) = parse_metadata_comments(input)?;
-    let (input, postings) = many1(parse_posting)(input)?;
+    let (input, postings) = many1(parse_posting).parse(input)?;
 
     Ok((
         input,
@@ -591,11 +614,12 @@ fn parse_ledger_item(input: &str) -> LedgerParseResult<'_, LedgerItem> {
         parse_include_file
             .map(str::to_owned)
             .map(LedgerItem::Include),
-    ))(input)
+    ))
+    .parse(input)
 }
 
 pub fn parse_ledger(input: &str) -> LedgerParseResult<'_, Ledger> {
-    let (input, items) = many0(parse_ledger_item)(input)?;
+    let (input, items) = many0(parse_ledger_item).parse(input)?;
     let (input, _) = eof(input)?;
 
     Ok((input, Ledger { items }))
