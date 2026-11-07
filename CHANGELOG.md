@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [8.0.0] - 2026-11-07
 
 - Upgrade nom to v8 (requires the new `nom-language` dependency for detailed error messages)
 - Transition to Rust 2024 edition
